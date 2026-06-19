@@ -1,6 +1,9 @@
 import json
 import logging
 import os
+import subprocess
+
+import yaml
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -10,6 +13,7 @@ logging.basicConfig(
 class engine:
     def __init__(self) -> None:
         self.index = set()
+        self.config = dict()
 
     def scan_folder(self, directory: str):
         """
@@ -45,10 +49,11 @@ class engine:
         else:
             self.index.update(new_files)
 
-    def write_index_to_disk(self, path):
+    def write_index_to_disk(self):
         """
         Writes the index to a file on disk.
         """
+        path = self.config["storage"]["index_path"]
         try:
             with open(path, "w") as f:
                 json.dump(list(self.index), f)
@@ -56,13 +61,36 @@ class engine:
         except Exception as e:
             logging.error(f"Error writing index to {path}: {e}")
 
-    def load_index_from_disk(self, path):
+    def load_index_from_disk(self):
         """
         Loads the index from a file on disk.
         """
+        path = self.config["storage"]["index_path"]
         try:
             with open(path, "r") as f:
                 self.index.update(json.load(f))
             logging.info(f"Index loaded from {path} successfully.")
         except Exception as e:
             logging.error(f"Error loading index from {path}: {e}")
+
+    def load_config(self, path: str):
+        """
+        Loads the YAML config from the given path.
+        """
+        try:
+            with open(path, "r") as f:
+                self.config = yaml.safe_load(f)
+            logging.info(f"Config loaded from {path} successfully.")
+        except Exception as e:
+            logging.error(f"Error loading config from {path}: {e}")
+
+    def save_config(self, path: str):
+        """
+        Saves the current config to a YAML file at the given path.
+        """
+        try:
+            with open(path, "w") as f:
+                yaml.safe_dump(self.config, f)
+            logging.info(f"Config saved to {path} successfully.")
+        except Exception as e:
+            logging.error(f"Error saving config from {path}: {e}")
