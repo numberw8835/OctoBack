@@ -87,7 +87,16 @@ def run_backup():
 
             if should_copy:
                 os.makedirs(os.path.dirname(dest_file), exist_ok=True)
-                shutil.copy2(src_file, dest_file)
+                try:
+                    shutil.copy2(src_file, dest_file)
+                except PermissionError:
+                    try:
+                        if os.path.exists(dest_file):
+                            os.chmod(dest_file, 0o666)
+                            os.remove(dest_file)
+                        shutil.copy2(src_file, dest_file)
+                    except Exception:
+                        raise
 
         # Complete progress bar display
         draw_progress(total_files, total_files, "complete", "backing up")

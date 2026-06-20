@@ -33,7 +33,16 @@ def execute_restore(file_list: list) -> bool:
         current_name = os.path.basename(src)
         draw_progress(i, total, current_name, "restoring")
         os.makedirs(os.path.dirname(dest), exist_ok=True)
-        shutil.copy2(src, dest)
+        try:
+            shutil.copy2(src, dest)
+        except PermissionError:
+            try:
+                if os.path.exists(dest):
+                    os.chmod(dest, 0o666)
+                    os.remove(dest)
+                shutil.copy2(src, dest)
+            except Exception:
+                raise
 
     draw_progress(total, total, "complete", "restoring")
     sys.stdout.write("\n")
