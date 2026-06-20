@@ -1,4 +1,5 @@
 import argparse
+import json
 import logging
 import os
 
@@ -61,14 +62,26 @@ def main():
     )
 
     # Backup command
-    subparsers.add_parser(
-        "backup", help="Run the backup process based on the index."
+    subparsers.add_parser("backup", help="Run the backup process based on the index.")
+
+    # Remove command
+    remove_parser = subparsers.add_parser(
+        "remove", aliases=["rm"], help="Remove a directory or file from the index."
+    )
+    remove_parser.add_argument(
+        "path",
+        type=str,
+        nargs="?",
+        default=".",
+        help="Directory or file path to remove (defaults to current directory if not specified)",
     )
 
     args = parser.parse_args()
 
     if args.command == "add":
         add_to_index(args.add, recursive=args.recursive)
+    elif args.command in ["remove", "rm"]:
+        remove_from_index(args.path)
     elif args.command == "restore":
         restore_from_backup(args.restore, all_files=args.all)
     elif args.command == "init":
@@ -94,6 +107,22 @@ def add_to_index(path, recursive=False):
         engine.add_folder_to_index(path)
 
     engine.save_index(index_path)
+
+
+def remove_from_index(path):
+    if not engine.config.load_config(DEFAULT_CONFIG):
+        logging.error("Failed to load config. Please run 'octoback init' first.")
+        return
+    index_path = engine.config.configuration["storage"]["index_path"]
+
+    if os.path.exists(index_path):
+        engine.load_index(index_path)
+    else:
+        logging.info("Index file does not exist. Nothing to remove.")
+        return
+
+    if engine.remove_from_index(path):
+        engine.save_index(index_path)
 
 
 def run_tui(items):
@@ -128,9 +157,21 @@ def run_tui(items):
             visible_height = max_y - 6  # Leave room for headers/footers
 
             # Render header
-            stdscr.addstr(0, 0, " === OctoBack Restore TUI === ", curses.A_BOLD | color_info)
-            stdscr.addstr(1, 0, "Use Up/Down (or j/k) to navigate | Space to select | 'a' to toggle all", curses.A_DIM)
-            stdscr.addstr(2, 0, "Press Enter to restore selected | 'q' or ESC to cancel", curses.A_DIM)
+            stdscr.addstr(
+                0, 0, " === OctoBack Restore TUI === ", curses.A_BOLD | color_info
+            )
+            stdscr.addstr(
+                1,
+                0,
+                "Use Up/Down (or j/k) to navigate | Space to select | 'a' to toggle all",
+                curses.A_DIM,
+            )
+            stdscr.addstr(
+                2,
+                0,
+                "Press Enter to restore selected | 'q' or ESC to cancel",
+                curses.A_DIM,
+            )
             stdscr.addstr(3, 0, "-" * min(max_x - 1, 70), curses.A_DIM)
 
             # Calculate scrolling window
@@ -143,11 +184,11 @@ def run_tui(items):
             for i in range(min(visible_height, len(items) - start_idx)):
                 idx = start_idx + i
                 item = items[idx]
-                
+
                 # Format item row
                 chk_box = "[x]" if selected[idx] else "[ ]"
                 style = color_highlight if idx == current_idx else curses.A_NORMAL
-                
+
                 # Color the checked boxes differently if not highlighted
                 if selected[idx] and idx != current_idx:
                     stdscr.addstr(4 + i, 2, chk_box, color_selected | curses.A_BOLD)
@@ -157,31 +198,52 @@ def run_tui(items):
 
             # Render footer with scroll indicator
             if len(items) > visible_height:
-                stdscr.addstr(max_y - 1, 0, f" -- Scroll for more ({current_idx + 1}/{len(items)}) -- ", color_info)
+                stdscr.addstr(
+                    max_y - 1,
+                    0,
+                    f" -- Scroll for more ({current_idx + 1}/{len(items)}) -- ",
+                    color_info,
+                )
 
             stdscr.refresh()
 
             key = stdscr.getch()
 
-            if key in [curses.KEY_UP, ord('k')]:
+            if key in [curses.KEY_UP, ord("k")]:
                 current_idx = (current_idx - 1) % len(items)
-            elif key in [curses.KEY_DOWN, ord('j')]:
+            elif key in [curses.KEY_DOWN, ord("j")]:
                 current_idx = (current_idx + 1) % len(items)
-            elif key == ord(' '):
+            elif key == ord(" "):
                 selected[current_idx] = not selected[current_idx]
-            elif key == ord('a'):
+            elif key == ord("a"):
                 if all(selected):
                     selected = [False] * len(items)
                 else:
                     selected = [True] * len(items)
             elif key in [10, 13]:  # Enter
                 break
-            elif key in [ord('q'), 27]:  # 'q' or Esc
+            elif key in [ord("q"), 27]:  # 'q' or Esc
                 return None
 
         return [items[i] for i, sel in enumerate(selected) if sel]
 
     return curses.wrapper(main_curses)
+
+
+def calculate_sha1(filepath):
+    import hashlib
+
+    sha1 = hashlib.sha1()
+    try:
+        with open(filepath, "rb") as f:
+            while True:
+                data = f.read(65536)
+                if not data:
+                    break
+                sha1.update(data)
+        return sha1.hexdigest()
+    except Exception:
+        return None
 
 
 def restore_from_backup(path, all_files=False):
@@ -192,6 +254,7 @@ def restore_from_backup(path, all_files=False):
 
     vault_path = engine.config.configuration["storage"]["vault_path"]
     index_path = engine.config.configuration["storage"]["index_path"]
+    checksums_path = os.path.join(vault_path, "checksums.json")
 
     if os.path.exists(index_path):
         engine.load_index(index_path)
@@ -203,6 +266,27 @@ def restore_from_backup(path, all_files=False):
     # Check if any block_id in engine.index is None; repartition it on the fly
     if any(block_id is None for _, block_id in engine.index):
         engine.repartition_index()
+
+    # Load checksums if they exist
+    checksums = {}
+    if os.path.exists(checksums_path):
+        try:
+            with open(checksums_path, "r") as f:
+                checksums = json.load(f)
+        except Exception as e:
+            logging.error(f"Error loading checksums: {e}")
+
+    def verify_block_integrity(block_file, block_id):
+        if not checksums or block_id not in checksums:
+            return True  # If no checksum stored, bypass validation
+        current_sha = calculate_sha1(block_file)
+        expected_sha = checksums[block_id]
+        if current_sha != expected_sha:
+            logging.critical(
+                f"INTEGRITY ERROR: Corruption detected in archive '{block_file}'! Checksum mismatch."
+            )
+            return False
+        return True
 
     # Check for TUI mode
     if path == "list":
@@ -226,7 +310,7 @@ def restore_from_backup(path, all_files=False):
 
         for rel_p in selected_rel_paths:
             abs_p = os.path.abspath(os.path.join(cwd, rel_p))
-            
+
             # Find the block_id for abs_p using longest-prefix match
             block_id = None
             best_len = -1
@@ -244,6 +328,14 @@ def restore_from_backup(path, all_files=False):
                 continue
 
             block_file = os.path.join(vault_path, f"{block_id}.tar.gz")
+            if not os.path.exists(block_file):
+                logging.error(f"Block archive not found: {block_file}")
+                continue
+
+            # Verify integrity
+            if not verify_block_integrity(block_file, block_id):
+                return
+
             archive_target = abs_p.lstrip(os.sep)
             dest = os.path.dirname(abs_p)
             logging.info(f"Restoring {abs_p} from {block_id}...")
@@ -263,6 +355,11 @@ def restore_from_backup(path, all_files=False):
             if not os.path.exists(block_file):
                 logging.error(f"Block archive not found: {block_file}")
                 continue
+
+            # Verify integrity
+            if not verify_block_integrity(block_file, block_id):
+                return
+
             for item in items:
                 archive_target = item.lstrip(os.sep)
                 dest = os.path.dirname(item)
@@ -271,25 +368,29 @@ def restore_from_backup(path, all_files=False):
     else:
         if not path:
             path = os.getcwd()
-        
+
         abs_target = os.path.abspath(path)
-        
+
         # Check index for any matches
         matching_blocks = set()
         for indexed_path, block_id in engine.index:
-            if (abs_target == indexed_path 
+            if (
+                abs_target == indexed_path
                 or abs_target.startswith(indexed_path + os.sep)
-                or indexed_path.startswith(abs_target + os.sep)):
+                or indexed_path.startswith(abs_target + os.sep)
+            ):
                 matching_blocks.add(block_id)
 
         if not matching_blocks:
-            logging.warning(f"Path '{abs_target}' is not in the index. Restoration may fail.")
+            logging.warning(
+                f"Path '{abs_target}' is not in the index. Restoration may fail."
+            )
             block_id = "block_" + abs_target.strip("/").replace("/", "_")
             matching_blocks.add(block_id)
 
         archive_target = abs_target.lstrip(os.sep)
         dest = os.path.dirname(abs_target)
-        
+
         success_any = False
         for block_id in matching_blocks:
             block_file = os.path.join(vault_path, f"{block_id}.tar.gz")
@@ -300,6 +401,11 @@ def restore_from_backup(path, all_files=False):
                     block_file = monolithic_path
                 else:
                     continue
+
+            # Verify integrity (if not monolithic fallback)
+            if block_file != os.path.join(vault_path, "block.tar.gz"):
+                if not verify_block_integrity(block_file, block_id):
+                    return
 
             logging.info(f"Restoring {abs_target} from {block_id}...")
             success = engine.controller.uncompress(block_file, archive_target, dest)
@@ -365,7 +471,7 @@ def run_backup():
                 if len(indexed_path) > best_len:
                     best_len = len(indexed_path)
                     best_match_block = block_id
-        
+
         if best_match_block:
             if best_match_block not in block_files:
                 block_files[best_match_block] = []
@@ -377,6 +483,7 @@ def run_backup():
 
     # 3. Create temporary directories for staging
     import shutil
+
     temp_vault = os.path.expanduser("~/.octoback/temp_vault")
     temp_packages = os.path.expanduser("~/.octoback/temp_vault_packages")
 
@@ -385,25 +492,27 @@ def run_backup():
     os.makedirs(temp_vault, exist_ok=True)
     os.makedirs(temp_packages, exist_ok=True)
 
-    # 4. Copy and compress each block
+    checksums = {}  # block_id -> sha1_hash
+
+    # 4. Copy, compress, and calculate checksums for each block
     for block_id, files in block_files.items():
         block_temp_dir = os.path.join(temp_vault, block_id)
         os.makedirs(block_temp_dir, exist_ok=True)
-        
+
         # Copy block files mirroring absolute paths
         for f in files:
             rel_path = f.lstrip(os.sep)
             dest_f = os.path.join(block_temp_dir, rel_path)
             engine.controller.copy_to(f, dest_f)
-            
+
         # Compress
         logging.info(f"Compressing block {block_id}...")
         compressed_archive = os.path.join(temp_packages, f"{block_id}.tar.gz")
-        
+
         subdirs = os.listdir(block_temp_dir)
         if not subdirs:
             continue
-            
+
         command = [
             "tar",
             "-czf",
@@ -411,26 +520,56 @@ def run_backup():
             "-C",
             block_temp_dir,
         ] + subdirs
-        
+
         import subprocess
+
         try:
             subprocess.run(command, check=True)
             logging.info(f"Successfully compressed block {block_id}")
+
+            # Calculate and store checksum
+            sha = calculate_sha1(compressed_archive)
+            if sha:
+                checksums[block_id] = sha
         except Exception as e:
             logging.error(f"Failed to compress block {block_id}: {e}")
             shutil.rmtree(temp_vault, ignore_errors=True)
             shutil.rmtree(temp_packages, ignore_errors=True)
             return
 
-    # 5. Replace Vault directory atomically
+    # Write the checksums JSON file inside the temp_packages staging dir
+    checksums_path = os.path.join(temp_packages, "checksums.json")
     try:
-        shutil.rmtree(vault_path, ignore_errors=True)
-        os.makedirs(vault_path, exist_ok=True)
-        for item in os.listdir(temp_packages):
-            shutil.move(os.path.join(temp_packages, item), os.path.join(vault_path, item))
+        with open(checksums_path, "w") as f:
+            json.dump(checksums, f)
+    except Exception as e:
+        logging.error(f"Failed to save checksums: {e}")
+        shutil.rmtree(temp_vault, ignore_errors=True)
+        shutil.rmtree(temp_packages, ignore_errors=True)
+        return
+
+    # 5. Replace Vault directory atomically (Atomic Vault Swap)
+    backup_vault_path = vault_path + "_old"
+
+    try:
+        # Move current vault out of the way
+        if os.path.exists(vault_path):
+            shutil.move(vault_path, backup_vault_path)
+
+        # Move temp packages to be the new Vault
+        shutil.move(temp_packages, vault_path)
+
+        # Delete old Vault backup
+        if os.path.exists(backup_vault_path):
+            shutil.rmtree(backup_vault_path, ignore_errors=True)
+
         logging.info("Backup successfully completed.")
     except Exception as e:
         logging.error(f"Error replacing vault files: {e}")
+        # Try to rollback if old vault was moved
+        if os.path.exists(backup_vault_path):
+            shutil.rmtree(vault_path, ignore_errors=True)
+            shutil.move(backup_vault_path, vault_path)
     finally:
         # 6. Clean up temp directories
         shutil.rmtree(temp_vault, ignore_errors=True)
@@ -438,5 +577,10 @@ def run_backup():
 
 
 if __name__ == "__main__":
+    import sys
     engine = Engine()
-    main()
+    try:
+        main()
+    except (KeyboardInterrupt, EOFError):
+        logging.info("Operation interrupted by user.")
+        sys.exit(130)

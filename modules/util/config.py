@@ -33,10 +33,13 @@ class Config:
         Saves the current config to a YAML file at the given path.
         """
         try:
-            if not os.path.exists(path):
-                os.makedirs(os.path.dirname(path), exist_ok=True)
-            with open(path, "w") as f:
+            dir_name = os.path.dirname(path)
+            if not os.path.exists(dir_name):
+                os.makedirs(dir_name, exist_ok=True)
+            tmp_path = path + ".tmp"
+            with open(tmp_path, "w") as f:
                 yaml.safe_dump(self.configuration, f)
+            os.replace(tmp_path, path)
             logging.info(f"Config saved to {path} successfully.")
         except Exception as e:
             logging.error(f"Error saving config from {path}: {e}")

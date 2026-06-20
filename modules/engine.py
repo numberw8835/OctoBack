@@ -48,6 +48,28 @@ class Engine:
             for f in new_files:
                 self.index.add((f, None))
 
+    def remove_from_index(self, path: str) -> bool:
+        """
+        Removes a path (file or folder) and its children from the index.
+        Returns True if any entries were removed, False otherwise.
+        """
+        abs_target = os.path.abspath(path)
+        initial_len = len(self.index)
+
+        self.index = {
+            (indexed_path, block_id)
+            for indexed_path, block_id in self.index
+            if not (indexed_path == abs_target or indexed_path.startswith(abs_target + os.sep))
+        }
+
+        removed_count = initial_len - len(self.index)
+        if removed_count > 0:
+            logging.info(f"Removed {removed_count} entries matching '{path}' from the index.")
+            return True
+        else:
+            logging.info(f"No entries matching '{path}' found in the index.")
+            return False
+
     def partition_directory(self, dir_path, threshold):
         # 1. Collect all files under dir_path
         all_files = []
@@ -143,8 +165,13 @@ class Engine:
         """
         self.repartition_index()
         try:
-            with open(path, "w") as f:
+            dir_name = os.path.dirname(path)
+            if not os.path.exists(dir_name):
+                os.makedirs(dir_name, exist_ok=True)
+            tmp_path = path + ".tmp"
+            with open(tmp_path, "w") as f:
                 json.dump(list(self.index), f)
+            os.replace(tmp_path, path)
             logging.info(f"Index written to {path} successfully.")
         except Exception as e:
             logging.error(f"Error writing index to {path}: {e}")
