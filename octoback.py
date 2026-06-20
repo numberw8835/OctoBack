@@ -192,20 +192,23 @@ def restore_from_backup(path, all_files=False):
 
     vault_path = engine.config.configuration["storage"]["vault_path"]
     index_path = engine.config.configuration["storage"]["index_path"]
-    block_path = os.path.join(vault_path, "block.tar.gz")
-
-    if not os.path.exists(block_path):
-        logging.error(f"Backup archive not found at {block_path}")
-        return
 
     if os.path.exists(index_path):
         engine.load_index(index_path)
+
+    if not engine.index:
+        logging.info("Index is empty. Nothing to restore.")
+        return
+
+    # Check if any block_id in engine.index is None; repartition it on the fly
+    if any(block_id is None for _, block_id in engine.index):
+        engine.repartition_index()
 
     # Check for TUI mode
     if path == "list":
         cwd = os.getcwd()
         matching_paths = []
-        for indexed_path in engine.index:
+        for indexed_path, block_id in engine.index:
             if indexed_path == cwd or indexed_path.startswith(cwd + os.sep):
                 matching_paths.append(indexed_path)
 
@@ -223,45 +226,87 @@ def restore_from_backup(path, all_files=False):
 
         for rel_p in selected_rel_paths:
             abs_p = os.path.abspath(os.path.join(cwd, rel_p))
+            
+            # Find the block_id for abs_p using longest-prefix match
+            block_id = None
+            best_len = -1
+            for indexed_path, bid in engine.index:
+                if abs_p == indexed_path:
+                    block_id = bid
+                    break
+                if abs_p.startswith(indexed_path + os.sep):
+                    if len(indexed_path) > best_len:
+                        best_len = len(indexed_path)
+                        block_id = bid
+
+            if not block_id:
+                logging.error(f"Cannot find block ID for path: {abs_p}")
+                continue
+
+            block_file = os.path.join(vault_path, f"{block_id}.tar.gz")
             archive_target = abs_p.lstrip(os.sep)
             dest = os.path.dirname(abs_p)
-            logging.info(f"Restoring {abs_p}...")
-            engine.controller.uncompress(block_path, archive_target, dest)
+            logging.info(f"Restoring {abs_p} from {block_id}...")
+            engine.controller.uncompress(block_file, archive_target, dest)
         return
 
     if all_files:
-        if not engine.index:
-            logging.info("Index is empty. Nothing to restore.")
-            return
-        for item in engine.index:
-            archive_target = item.lstrip(os.sep)
-            dest = os.path.dirname(item)
-            logging.info(f"Restoring {item} to {dest}...")
-            engine.controller.uncompress(block_path, archive_target, dest)
+        # Group paths by block_id to minimize uncompress calls
+        blocks_to_restore = {}
+        for item, block_id in engine.index:
+            if block_id not in blocks_to_restore:
+                blocks_to_restore[block_id] = []
+            blocks_to_restore[block_id].append(item)
+
+        for block_id, items in blocks_to_restore.items():
+            block_file = os.path.join(vault_path, f"{block_id}.tar.gz")
+            if not os.path.exists(block_file):
+                logging.error(f"Block archive not found: {block_file}")
+                continue
+            for item in items:
+                archive_target = item.lstrip(os.sep)
+                dest = os.path.dirname(item)
+                logging.info(f"Restoring {item} from {block_id}...")
+                engine.controller.uncompress(block_file, archive_target, dest)
     else:
-        # Default to current directory if path not specified
         if not path:
             path = os.getcwd()
         
         abs_target = os.path.abspath(path)
         
-        # Check if the path, its parent, or any of its children are in the index
-        is_indexed = False
-        for indexed_path in engine.index:
+        # Check index for any matches
+        matching_blocks = set()
+        for indexed_path, block_id in engine.index:
             if (abs_target == indexed_path 
                 or abs_target.startswith(indexed_path + os.sep)
                 or indexed_path.startswith(abs_target + os.sep)):
-                is_indexed = True
-                break
-        
-        if not is_indexed:
-            logging.warning(f"Path '{abs_target}' is not in the index. Restoration may fail or be empty.")
+                matching_blocks.add(block_id)
+
+        if not matching_blocks:
+            logging.warning(f"Path '{abs_target}' is not in the index. Restoration may fail.")
+            block_id = "block_" + abs_target.strip("/").replace("/", "_")
+            matching_blocks.add(block_id)
 
         archive_target = abs_target.lstrip(os.sep)
         dest = os.path.dirname(abs_target)
-        logging.info(f"Restoring {abs_target}...")
-        success = engine.controller.uncompress(block_path, archive_target, dest)
-        if success:
+        
+        success_any = False
+        for block_id in matching_blocks:
+            block_file = os.path.join(vault_path, f"{block_id}.tar.gz")
+            if not os.path.exists(block_file):
+                # Fallback to monolithic block if it exists
+                monolithic_path = os.path.join(vault_path, "block.tar.gz")
+                if os.path.exists(monolithic_path):
+                    block_file = monolithic_path
+                else:
+                    continue
+
+            logging.info(f"Restoring {abs_target} from {block_id}...")
+            success = engine.controller.uncompress(block_file, archive_target, dest)
+            if success:
+                success_any = True
+
+        if success_any:
             logging.info(f"Successfully restored to {abs_target}")
         else:
             logging.error(f"Failed to restore {abs_target}")
@@ -295,103 +340,101 @@ def run_backup():
         logging.info("Index is empty. Nothing to backup.")
         return
 
-    # Ensure vault exists
-    import shutil
-    os.makedirs(vault_path, exist_ok=True)
+    # 1. Expand all indexed paths to a set of absolute file paths
+    all_files = set()
+    for path, _ in engine.index:
+        if not os.path.exists(path):
+            continue
+        if os.path.isdir(path):
+            for root_dir, _, files in os.walk(path):
+                for f in files:
+                    all_files.add(os.path.abspath(os.path.join(root_dir, f)))
+        else:
+            all_files.add(os.path.abspath(path))
 
-    # Move old block.tar.gz out of the way to prevent self-compression
-    block_path = os.path.join(vault_path, "block.tar.gz")
-    backup_block_path = os.path.join(vault_path, "block.tar.gz.bak")
-    if os.path.exists(block_path):
+    # 2. Group files by block_id using longest prefix match
+    block_files = {}  # block_id -> list of file paths
+    for filepath in all_files:
+        best_match_block = None
+        best_len = -1
+        for indexed_path, block_id in engine.index:
+            if filepath == indexed_path:
+                best_match_block = block_id
+                break
+            if filepath.startswith(indexed_path + os.sep):
+                if len(indexed_path) > best_len:
+                    best_len = len(indexed_path)
+                    best_match_block = block_id
+        
+        if best_match_block:
+            if best_match_block not in block_files:
+                block_files[best_match_block] = []
+            block_files[best_match_block].append(filepath)
+
+    if not block_files:
+        logging.warning("No files found to backup.")
+        return
+
+    # 3. Create temporary directories for staging
+    import shutil
+    temp_vault = os.path.expanduser("~/.octoback/temp_vault")
+    temp_packages = os.path.expanduser("~/.octoback/temp_vault_packages")
+
+    shutil.rmtree(temp_vault, ignore_errors=True)
+    shutil.rmtree(temp_packages, ignore_errors=True)
+    os.makedirs(temp_vault, exist_ok=True)
+    os.makedirs(temp_packages, exist_ok=True)
+
+    # 4. Copy and compress each block
+    for block_id, files in block_files.items():
+        block_temp_dir = os.path.join(temp_vault, block_id)
+        os.makedirs(block_temp_dir, exist_ok=True)
+        
+        # Copy block files mirroring absolute paths
+        for f in files:
+            rel_path = f.lstrip(os.sep)
+            dest_f = os.path.join(block_temp_dir, rel_path)
+            engine.controller.copy_to(f, dest_f)
+            
+        # Compress
+        logging.info(f"Compressing block {block_id}...")
+        compressed_archive = os.path.join(temp_packages, f"{block_id}.tar.gz")
+        
+        subdirs = os.listdir(block_temp_dir)
+        if not subdirs:
+            continue
+            
+        command = [
+            "tar",
+            "-czf",
+            compressed_archive,
+            "-C",
+            block_temp_dir,
+        ] + subdirs
+        
+        import subprocess
         try:
-            shutil.move(block_path, backup_block_path)
+            subprocess.run(command, check=True)
+            logging.info(f"Successfully compressed block {block_id}")
         except Exception as e:
-            logging.error(f"Failed to move old backup out of the way: {e}")
+            logging.error(f"Failed to compress block {block_id}: {e}")
+            shutil.rmtree(temp_vault, ignore_errors=True)
+            shutil.rmtree(temp_packages, ignore_errors=True)
             return
 
-    # Remove previous uncompressed folders/files in the vault
+    # 5. Replace Vault directory atomically
     try:
-        for item in os.listdir(vault_path):
-            item_path = os.path.join(vault_path, item)
-            if item_path == backup_block_path:
-                continue
-            if os.path.isdir(item_path):
-                shutil.rmtree(item_path)
-            else:
-                os.remove(item_path)
+        shutil.rmtree(vault_path, ignore_errors=True)
+        os.makedirs(vault_path, exist_ok=True)
+        for item in os.listdir(temp_packages):
+            shutil.move(os.path.join(temp_packages, item), os.path.join(vault_path, item))
+        logging.info("Backup successfully completed.")
     except Exception as e:
-        logging.error(f"Error preparing vault: {e}")
-        # Try to restore backup block if we failed early
-        if os.path.exists(backup_block_path):
-            shutil.move(backup_block_path, block_path)
-        return
-
-    # Copy all indexed items mirroring their absolute paths
-    for path in engine.index:
-        if not os.path.exists(path):
-            logging.warning(f"Indexed path {path} does not exist. Skipping.")
-            continue
-        rel_path = path.lstrip(os.sep)
-        dest_path = os.path.join(vault_path, rel_path)
-        logging.info(f"Copying {path} to vault mirror...")
-        engine.controller.copy_to(path, dest_path)
-
-    # Compress the Vault contents (to prevent the Vault/ prefix in the archive)
-    logging.info("Compressing vault...")
-    compressed_file = os.path.join(os.path.dirname(vault_path), "Vault.tar.gz")
-    
-    subdirs = [item for item in os.listdir(vault_path) if os.path.join(vault_path, item) != backup_block_path]
-    if not subdirs:
-        logging.error("Vault is empty. Nothing to compress.")
-        if os.path.exists(backup_block_path):
-            shutil.move(backup_block_path, block_path)
-        return
-
-    command = [
-        "tar",
-        "-czf",
-        compressed_file,
-        "-C",
-        vault_path,
-    ] + subdirs
-
-    try:
-        import subprocess
-        subprocess.run(command, check=True)
-        logging.info(f"Compression successful: {compressed_file}")
-    except Exception as e:
-        logging.error(f"Compression failed: {e}")
-        # Try to restore backup block
-        if os.path.exists(backup_block_path):
-            shutil.move(backup_block_path, block_path)
-        return
-
-    # Move block.tar.gz inside the vault
-    try:
-        shutil.move(compressed_file, block_path)
-        logging.info(f"Backup package saved to {block_path}")
-        if os.path.exists(backup_block_path):
-            os.remove(backup_block_path)
-    except Exception as e:
-        logging.error(f"Failed to move package to vault: {e}")
-        # Try to restore backup block
-        if os.path.exists(backup_block_path):
-            shutil.move(backup_block_path, block_path)
-        return
-
-    # Clean up the uncompressed mirror directories in vault
-    try:
-        for item in os.listdir(vault_path):
-            item_path = os.path.join(vault_path, item)
-            if item_path == block_path:
-                continue
-            if os.path.isdir(item_path):
-                shutil.rmtree(item_path)
-            else:
-                os.remove(item_path)
-        logging.info("Uncompressed backup files cleaned up successfully.")
-    except Exception as e:
-        logging.error(f"Error cleaning up uncompressed files in vault: {e}")
+        logging.error(f"Error replacing vault files: {e}")
+    finally:
+        # 6. Clean up temp directories
+        shutil.rmtree(temp_vault, ignore_errors=True)
+        shutil.rmtree(temp_packages, ignore_errors=True)
 
 
 if __name__ == "__main__":
