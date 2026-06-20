@@ -68,9 +68,9 @@ def main():
     add_parser.add_argument(
         "add",
         type=str,
-        nargs="?",
-        default=".",
-        help="Directory path or folder name (current directory if not specified)",
+        nargs="*",
+        default=["."],
+        help="Directory paths or folder names (current directory if not specified)",
     )
     add_parser.add_argument(
         "-R",
@@ -109,9 +109,9 @@ def main():
     remove_parser.add_argument(
         "path",
         type=str,
-        nargs="?",
-        default=".",
-        help="Directory or file path to remove (defaults to current directory if not specified)",
+        nargs="*",
+        default=["."],
+        help="Directory or file paths to remove (defaults to current directory if not specified)",
     )
 
     # Zip command
