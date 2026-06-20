@@ -13,6 +13,7 @@ from modules.commands import (
     cleanup_temp_dirs,
     run_zip,
     run_unzip,
+    list_index,
 )
 
 description_message = """
@@ -120,6 +121,9 @@ def main():
     # Unzip command
     subparsers.add_parser("unzip", help="Decompress the backup vault ZIP file back to the vault.")
 
+    # List command
+    subparsers.add_parser("list", help="List all files in the index using the TUI.")
+
     args = parser.parse_args()
 
     setup_logging(verbose=args.verbose)
@@ -138,6 +142,8 @@ def main():
         run_zip()
     elif args.command == "unzip":
         run_unzip()
+    elif args.command == "list":
+        list_index()
     else:
         parser.print_help()
 

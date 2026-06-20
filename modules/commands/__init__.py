@@ -5,4 +5,5 @@ from modules.commands.restore import restore_from_backup
 from modules.commands.backup import run_backup, cleanup_temp_dirs
 from modules.commands.zip import run_zip
 from modules.commands.unzip import run_unzip
+from modules.commands.list import list_index
 
