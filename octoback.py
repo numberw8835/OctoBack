@@ -11,6 +11,8 @@ from modules.commands import (
     initialize_environment,
     run_backup,
     cleanup_temp_dirs,
+    run_zip,
+    run_unzip,
 )
 
 description_message = """
@@ -112,6 +114,12 @@ def main():
         help="Directory or file path to remove (defaults to current directory if not specified)",
     )
 
+    # Zip command
+    subparsers.add_parser("zip", help="Compress the entire backup vault into a ZIP file.")
+
+    # Unzip command
+    subparsers.add_parser("unzip", help="Decompress the backup vault ZIP file back to the vault.")
+
     args = parser.parse_args()
 
     setup_logging(verbose=args.verbose)
@@ -126,6 +134,10 @@ def main():
         initialize_environment()
     elif args.command == "backup":
         run_backup()
+    elif args.command == "zip":
+        run_zip()
+    elif args.command == "unzip":
+        run_unzip()
     else:
         parser.print_help()
 

@@ -10,17 +10,9 @@ logging.basicConfig(
 )
 
 
-class TrieNode:
-    def __init__(self, name):
-        self.name = name
-        self.files = []
-        self.children = {}
-        self.total_size = 0
-
-
 class Engine:
     def __init__(self) -> None:
-        self.index = set()  # set of (path, block_id) tuples
+        self.index = set()  # set of absolute paths
         self.config = Config()
         self.controller = Controller()
 
@@ -46,38 +38,27 @@ class Engine:
             return os.path.expanduser("~") + path[1:]
         return os.path.abspath(path)
 
-    def get_block_id(self, path: str) -> str:
-        """
-        Generates a stable block ID from the portable representation of the path.
-        """
-        portable_path = self.to_portable_path(path)
-        # Substitute ~ with home_user to guarantee identical name structure regardless of username
-        clean_path = portable_path.replace("~", "home_user").strip("/").replace("/", "_")
-        return "block_" + clean_path
-
     def add_folder_to_index(self, directory: str):
         """
-        Adds a folder to the index.
+        Adds a folder/file to the index.
         """
         abs_path = os.path.abspath(directory)
-        exists = any(path == abs_path for path, _ in self.index)
-        if exists:
-            logging.info(f"Directory {directory} already indexed.")
+        if abs_path in self.index:
+            logging.info(f"Path {directory} already indexed.")
         else:
-            self.index.add((abs_path, None))
-            logging.info(f"Directory {directory} added to index.")
+            self.index.add(abs_path)
+            logging.info(f"Path {directory} added to index.")
 
     def update_index(self, stuff: set):
         """
         Updates the index with new files.
         """
-        existing_paths = {path for path, _ in self.index}
-        new_files = stuff - existing_paths
+        new_files = stuff - self.index
         if not new_files:
             logging.info("No new files to add to the index.")
         else:
             for f in new_files:
-                self.index.add((f, None))
+                self.index.add(f)
 
     def remove_from_index(self, path: str) -> bool:
         """
@@ -88,8 +69,8 @@ class Engine:
         initial_len = len(self.index)
 
         self.index = {
-            (indexed_path, block_id)
-            for indexed_path, block_id in self.index
+            indexed_path
+            for indexed_path in self.index
             if not (indexed_path == abs_target or indexed_path.startswith(abs_target + os.sep))
         }
 
@@ -101,110 +82,10 @@ class Engine:
             logging.info(f"No entries matching '{path}' found in the index.")
             return False
 
-    def partition_directory(self, dir_path, threshold):
-        # 1. Collect all files under dir_path
-        all_files = []
-        for root_dir, _, files in os.walk(dir_path):
-            for f in files:
-                fp = os.path.abspath(os.path.join(root_dir, f))
-                try:
-                    all_files.append((fp, os.path.getsize(fp)))
-                except OSError:
-                    continue
-
-        # 2. If total size <= threshold, keep the entire directory as one block
-        total_size = sum(sz for _, sz in all_files)
-        if total_size <= threshold:
-            block_id = self.get_block_id(dir_path)
-            return [(dir_path, block_id)]
-
-        # 3. Build Trie of the files relative to dir_path
-        root = TrieNode(os.path.basename(dir_path))
-        root.total_size = total_size
-
-        for fp, sz in all_files:
-            rel = os.path.relpath(fp, os.path.dirname(dir_path))
-            parts = rel.split("/")
-            curr = root
-            for part in parts[1:-1]:
-                if part not in curr.children:
-                    curr.children[part] = TrieNode(part)
-                curr = curr.children[part]
-                curr.total_size += sz
-            curr.files.append((fp, sz))
-
-        # 4. Recursively partition the Trie
-        partitions = []
-
-        def recurse(node, current_abs_path):
-            if node.total_size <= threshold:
-                block_id = self.get_block_id(current_abs_path)
-                node_files = []
-                def collect(n):
-                    for f, _ in n.files:
-                        node_files.append(f)
-                    for child in n.children.values():
-                        collect(collect(child))
-                # Helper function collect to gather all files in sub-nodes
-                def collect_all(n):
-                    for f, _ in n.files:
-                        node_files.append(f)
-                    for child in n.children.values():
-                        collect_all(child)
-                collect_all(node)
-                if node_files:
-                    partitions.append((current_abs_path, block_id))
-                return
-
-            # Split: process children
-            remainder_files = [f for f, _ in node.files]
-            for child_name, child_node in node.children.items():
-                child_abs_path = os.path.join(current_abs_path, child_name)
-                if child_node.total_size > threshold:
-                    recurse(child_node, child_abs_path)
-                else:
-                    child_files = []
-                    def collect_child_files(n):
-                        for f, _ in n.files:
-                            child_files.append(f)
-                        for child in n.children.values():
-                            collect_child_files(child)
-                    collect_child_files(child_node)
-                    if child_files:
-                        block_id = self.get_block_id(child_abs_path)
-                        partitions.append((child_abs_path, block_id))
-
-            if remainder_files:
-                block_id = self.get_block_id(current_abs_path) + "_remainder"
-                partitions.append((current_abs_path, block_id))
-
-        recurse(root, dir_path)
-        return partitions
-
-    def repartition_index(self, threshold=50 * 1024 * 1024):
-        # Retrieve threshold from loaded config if available
-        if self.config.configuration and "storage" in self.config.configuration:
-            threshold = self.config.configuration["storage"].get("threshold_bytes", threshold)
-
-        paths_to_partition = {path for path, _ in self.index}
-        new_mappings = set()
-        for path in paths_to_partition:
-            if not os.path.exists(path):
-                continue
-            if os.path.isdir(path):
-                partitions = self.partition_directory(path, threshold)
-                for sub_path, block_id in partitions:
-                    new_mappings.add((sub_path, block_id))
-            else:
-                block_id = self.get_block_id(path)
-                new_mappings.add((path, block_id))
-        self.index = new_mappings
-
     def save_index(self, path):
         """
         Writes the index to a file on disk.
         """
-        self.repartition_index()
         try:
             dir_name = os.path.dirname(path)
             if not os.path.exists(dir_name):
@@ -212,10 +93,7 @@ class Engine:
             tmp_path = path + ".tmp"
             
             # Serialize to portable paths
-            portable_data = []
-            for p, bid in self.index:
-                portable_p = self.to_portable_path(p)
-                portable_data.append([portable_p, bid])
+            portable_data = [self.to_portable_path(p) for p in self.index]
 
             with open(tmp_path, "w") as f:
                 json.dump(portable_data, f)
@@ -235,10 +113,10 @@ class Engine:
                 for item in data:
                     if isinstance(item, str):
                         abs_p = self.from_portable_path(item)
-                        self.index.add((abs_p, None))
-                    elif isinstance(item, (list, tuple)) and len(item) == 2:
+                        self.index.add(abs_p)
+                    elif isinstance(item, (list, tuple)) and len(item) >= 1:
                         abs_p = self.from_portable_path(item[0])
-                        self.index.add((abs_p, item[1]))
+                        self.index.add(abs_p)
             logging.info(f"Index loaded from {path} successfully.")
         except Exception as e:
             logging.error(f"Error loading index from {path}: {e}")
