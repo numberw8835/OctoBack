@@ -54,18 +54,20 @@ class Controller:
         logging.info("Paths are identical up to the common prefix.")
         return (split_path_A[min_len:], split_path_B[min_len:])
 
-    def copy_to(self, pathA: str, pathB: str) -> bool:
+    def copy_to(self, pathA: str, pathB: str, quiet: bool = False) -> bool:
         """
         Copies files from pathA to pathB using rsync.
         Ensures no recopying if the destination already has the same files.
 
         :param pathA: The source path
         :param pathB: The destination path
+        :param quiet: If True, suppresses output and logging
         :return: True if copying was successful, False otherwise
         """
         # Ensure the source exists
         if not os.path.exists(pathA):
-            logging.error(f"Source {pathA} does not exist.")
+            if not quiet:
+                logging.error(f"Source {pathA} does not exist.")
             return False
 
         # Ensure the destination directory exists or create it
@@ -73,24 +75,33 @@ class Controller:
         if not os.path.exists(dest_dir):
             try:
                 os.makedirs(dest_dir)
-                logging.info(f"Created destination directory: {dest_dir}")
+                if not quiet:
+                    logging.info(f"Created destination directory: {dest_dir}")
             except OSError as e:
-                logging.error(f"Failed to create destination directory {dest_dir}: {e}")
+                if not quiet:
+                    logging.error(f"Failed to create destination directory {dest_dir}: {e}")
                 return False
 
         # Determine the rsync command
         src = f"{pathA}/" if os.path.isdir(pathA) else pathA
-        command = ["rsync", "-avhH", "--ignore-existing", "--info=progress2", src, pathB]
+        if quiet:
+            command = ["rsync", "-aH", "--ignore-existing", src, pathB]
+        else:
+            command = ["rsync", "-avhH", "--ignore-existing", "--info=progress2", src, pathB]
 
         try:
             # Run the rsync command for copying
-            subprocess.run(command, check=True)
-            logging.info(f"Copy successful from {pathA} to {pathB}")
+            if quiet:
+                subprocess.run(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+            else:
+                subprocess.run(command, check=True)
+                logging.info(f"Copy successful from {pathA} to {pathB}")
             return True
         except subprocess.CalledProcessError as e:
-            logging.error(
-                f"Failed to copy from {pathA} to {pathB}: Command '{' '.join(command)}' returned non-zero exit status {e.returncode}."
-            )
+            if not quiet:
+                logging.error(
+                    f"Failed to copy from {pathA} to {pathB}: Command '{' '.join(command)}' returned non-zero exit status {e.returncode}."
+                )
             return False
 
     def compress(self, path: str) -> str:

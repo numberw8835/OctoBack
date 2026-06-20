@@ -19,6 +19,13 @@ class Config:
         try:
             with open(path, "r") as f:
                 self.configuration = yaml.safe_load(f)
+            # Expand ~ in loaded configuration paths
+            if self.configuration and "storage" in self.configuration:
+                for key in ["index_path", "vault_path"]:
+                    if key in self.configuration["storage"]:
+                        val = self.configuration["storage"][key]
+                        if isinstance(val, str):
+                            self.configuration["storage"][key] = os.path.expanduser(val)
             logging.info(f"Config loaded from {path} successfully.")
             return True
         except FileNotFoundError as e:
