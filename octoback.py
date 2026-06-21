@@ -7,14 +7,13 @@ import sys
 # Import command controllers from commands module
 from modules.commands import (
     add_to_index,
-    cleanup_temp_dirs,
     initialize_environment,
     list_index,
     remove_from_index,
     restore_from_backup,
     run_backup,
-    run_unzip,
-    run_zip,
+    run_compress,
+    run_uncompress,
 )
 
 description_message = """
@@ -130,13 +129,11 @@ def main():
 
     # 'zip' command configuration
     subparsers.add_parser(
-        "zip", help="Compress the entire backup vault into a ZIP file."
+        "compress", help="Compress the entire backup vault into a tarball."
     )
 
     # 'unzip' command configuration
-    subparsers.add_parser(
-        "unzip", help="Decompress the backup vault ZIP file back to the vault."
-    )
+    subparsers.add_parser("expand", help="Expand a tarball into the backup vault.")
 
     # 'list' command configuration
     subparsers.add_parser("list", help="List all files in the index using the TUI.")
@@ -156,10 +153,10 @@ def main():
         initialize_environment()
     elif args.command == "backup":
         run_backup(args.verbose)
-    elif args.command == "zip":
-        run_zip()
+    elif args.command == "compress":
+        run_compress()
     elif args.command == "unzip":
-        run_unzip()
+        run_uncompress()
     elif args.command == "list":
         list_index()
     else:
@@ -170,7 +167,6 @@ def main():
 if __name__ == "__main__":
     # Signal interrupt trap handler (Ctrl-C)
     def signal_handler(sig, frame):
-        cleanup_temp_dirs()
         try:
             sys.stdout.write("\rExiting... \033[K\n")
             sys.stdout.flush()
@@ -185,7 +181,6 @@ if __name__ == "__main__":
         main()
     except EOFError:
         # Handle Ctrl-D (EOF) exit
-        cleanup_temp_dirs()
         try:
             sys.stdout.write("\rExiting... \033[K\n")
             sys.stdout.flush()

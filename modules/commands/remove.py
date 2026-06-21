@@ -1,4 +1,5 @@
 import os
+
 from modules.constants import DEFAULT_CONFIG
 from modules.engine import Engine
 

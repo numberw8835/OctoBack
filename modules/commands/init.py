@@ -15,10 +15,6 @@ def initialize_environment():
             "index_path": "~/.octoback/index.json",
             # Location of the directory containing raw, copied backups
             "vault_path": "~/Vault",
-            # Threshold size (50MB by default) before warnings are raised or special transfer tools are selected
-            "threshold_bytes": 50 * 1024 * 1024,
-            # Compression level for archiving tools (default -1 uses standard system compression)
-            "gzip_level": -1,
         }
     }
 

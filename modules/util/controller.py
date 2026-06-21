@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 import subprocess
 import tarfile
 
@@ -13,6 +14,7 @@ class Controller:
     Executes file system operations including recursive directories scanning,
     path comparisons, copying files using rsync, and tar archive compression/decompression.
     """
+
     def scan_folder_for_files(self, directory: str):
         """
         Scans a directory recursively and returns absolute paths of all files found.
@@ -59,54 +61,73 @@ class Controller:
         logging.info("Paths are identical up to the common prefix.")
         return (split_path_A[min_len:], split_path_B[min_len:])
 
-    def copy_to(self, pathA: str, pathB: str, quiet: bool = False) -> bool:
+    def copy_to(self, pathA: str, pathB: str, progress_callback=None) -> bool:
         """
-        Copies files from pathA to pathB using rsync.
-        Uses --ignore-existing to ensure files already present at destination are not copied again.
-
-        :param pathA: The source path
-        :param pathB: The destination path
-        :param quiet: If True, redirects outputs and suppresses logging messages
-        :return: True if copying was successful, False otherwise
+        Copies source A to destination B, using rsync.
+        Supports a callback for real-time percentage updates from rsync's progress2 output.
         """
         # Verify that the source path exists
         if not os.path.exists(pathA):
-            if not quiet:
-                logging.error(f"Source {pathA} does not exist.")
+            logging.error(f"Source {pathA} does not exist.")
             return False
+
+        logging.info(f"source {pathA} located")
 
         # Ensure the parent directory structure of the destination exists or create it
         dest_dir = os.path.dirname(pathB)
         if not os.path.exists(dest_dir):
             try:
-                os.makedirs(dest_dir)
-                if not quiet:
-                    logging.info(f"Created destination directory: {dest_dir}")
+                os.makedirs(dest_dir, exist_ok=True)
+                logging.info(f"Created destination directory: {dest_dir}")
             except OSError as e:
-                if not quiet:
-                    logging.error(f"Failed to create destination directory {dest_dir}: {e}")
+                logging.error(f"Failed to create destination: {e}")
                 return False
+
+        logging.info(f"destination {dest_dir} located")
 
         # Build the rsync command. Append a trailing slash if copying a directory.
         src = f"{pathA}/" if os.path.isdir(pathA) else pathA
-        if quiet:
-            command = ["rsync", "-aH", "--ignore-existing", src, pathB]
-        else:
-            command = ["rsync", "-avhH", "--ignore-existing", "--info=progress2", src, pathB]
+        command = [
+            "rsync",
+            "-avhH",
+            "--info=progress2",
+            src,
+            pathB,
+        ]
+
+        # Regex to capture the percentage from rsync --info=progress2 output (e.g., " 45%")
+        progress_re = re.compile(r"(\d+)%")
 
         try:
-            # Execute the rsync subprocess
-            if quiet:
-                subprocess.run(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+            # Use Popen to read stdout line-by_line while the process is running
+            process = subprocess.Popen(
+                command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+            )
+            for line in process.stdout or []:
+                if progress_callback:
+                    match = progress_re.search(line)
+                    if match:
+                        # Extract percentage and convert to 0.0-1.0 scale
+                        percent = float(match.group(1)) / 100.0
+                        progress_callback(percent)
+
+            process.wait()
+
+            if progress_callback:
+                progress_callback(1.0)
+            if process.returncode == 0:
+                logging.info(f"copy successful from {pathA} to {pathB}")
+                return True
             else:
-                subprocess.run(command, check=True)
-                logging.info(f"Copy successful from {pathA} to {pathB}")
-            return True
-        except subprocess.CalledProcessError as e:
-            if not quiet:
-                logging.error(
-                    f"Failed to copy from {pathA} to {pathB}: Command '{' '.join(command)}' returned non-zero exit status {e.returncode}."
-                )
+                logging.error(f"rsync failed with exit code {process.returncode}")
+                return False
+
+        except Exception as e:
+            logging.error(f"Error during rsync execution: {e}")
             return False
 
     def compress(self, path: str) -> str:

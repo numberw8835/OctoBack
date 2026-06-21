@@ -1,5 +1,4 @@
 import sys
-import time
 
 
 def draw_progress(
@@ -22,8 +21,5 @@ def draw_progress(
         current_file = current_file[:27] + "..."
 
     # Write the formatted progress string to stdout and clear trailing line characters using \033[K (EL)
-    sys.stdout.write(f"\r{action} [{bar}] {pct}% | {current_file}\033[K")
+    sys.stdout.write(f"""\r{action} [{bar}] {pct}% | {current_file}\033[K """)
     sys.stdout.flush()
-
-
-

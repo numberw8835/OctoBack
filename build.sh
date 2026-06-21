@@ -5,7 +5,7 @@ set -e
 echo "Building standalone binary using PyInstaller..."
 
 # 1. Compile with PyInstaller
-pyinstaller --onefile --name octoback \
+pyinstaller --onedir --name octoback \
     --exclude-module numpy \
     --exclude-module scipy \
     --exclude-module matplotlib \
@@ -30,11 +30,15 @@ pyinstaller --onefile --name octoback \
     --exclude-module orjson \
     octoback.py
 
-# 2. Copy binary to ~/.local/bin
+# 2. Copy folder to ~/.local/share and create symlink
 BIN_DIR="$HOME/.local/bin"
-mkdir -p "$BIN_DIR"
-echo "Installing binary to $BIN_DIR/octoback..."
-cp dist/octoback "$BIN_DIR/octoback"
+SHARE_DIR="$HOME/.local/share"
+mkdir -p "$BIN_DIR" "$SHARE_DIR"
+echo "Installing directory to $SHARE_DIR/octoback..."
+rm -rf "$SHARE_DIR/octoback"
+cp -r dist/octoback "$SHARE_DIR/octoback"
+echo "Creating symlink in $BIN_DIR/octoback..."
+ln -sf "$SHARE_DIR/octoback/octoback" "$BIN_DIR/octoback"
 
 # 3. Clean up build artifacts to keep repository clean
 echo "Cleaning up build artifacts..."
