@@ -29,23 +29,37 @@ def execute_restore(file_list: list) -> bool:
     if total == 0:
         return False
 
+    failed_files = []
+
     for i, (src, dest) in enumerate(file_list):
         current_name = os.path.basename(src)
         draw_progress(i, total, current_name, "restoring")
-        os.makedirs(os.path.dirname(dest), exist_ok=True)
         try:
-            shutil.copy2(src, dest)
-        except PermissionError:
+            os.makedirs(os.path.dirname(dest), exist_ok=True)
             try:
-                if os.path.exists(dest):
-                    os.chmod(dest, 0o666)
-                    os.remove(dest)
                 shutil.copy2(src, dest)
-            except Exception:
-                raise
+            except PermissionError:
+                try:
+                    if os.path.exists(dest):
+                        os.chmod(dest, 0o666)
+                        os.remove(dest)
+                    shutil.copy2(src, dest)
+                except Exception:
+                    raise
+        except Exception as e:
+            failed_files.append((src, e))
 
     draw_progress(total, total, "complete", "restoring")
     sys.stdout.write("\n")
+
+    if failed_files:
+        print(f"warning: restoration completed with warnings (skipped {len(failed_files)} files)")
+        print("skipped files:")
+        for src, err in failed_files[:5]:
+            print(f"  • {os.path.basename(src)}: {err}")
+        if len(failed_files) > 5:
+            print(f"  ... and {len(failed_files) - 5} more files.")
+    
     return True
 
 

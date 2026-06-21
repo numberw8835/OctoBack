@@ -67,6 +67,8 @@ def run_backup():
     old_level = root_logger.level
     root_logger.setLevel(logging.WARNING)
 
+    failed_files = []
+
     try:
         for i, src_file in enumerate(all_source_files):
             dest_file = get_vault_target_path(src_file, vault_path)
@@ -74,35 +76,47 @@ def run_backup():
 
             draw_progress(i, total_files, current_name, "backing up")
 
-            should_copy = True
-            if os.path.exists(dest_file):
-                try:
-                    src_stat = os.stat(src_file)
-                    dest_stat = os.stat(dest_file)
-                    # Skip only if size matches and source is not newer than destination
-                    if src_stat.st_size == dest_stat.st_size and src_stat.st_mtime <= dest_stat.st_mtime:
-                        should_copy = False
-                except Exception:
-                    pass
-
-            if should_copy:
-                os.makedirs(os.path.dirname(dest_file), exist_ok=True)
-                try:
-                    shutil.copy2(src_file, dest_file)
-                except PermissionError:
+            try:
+                should_copy = True
+                if os.path.exists(dest_file):
                     try:
-                        if os.path.exists(dest_file):
-                            os.chmod(dest_file, 0o666)
-                            os.remove(dest_file)
-                        shutil.copy2(src_file, dest_file)
+                        src_stat = os.stat(src_file)
+                        dest_stat = os.stat(dest_file)
+                        # Skip only if size matches and source is not newer than destination
+                        if src_stat.st_size == dest_stat.st_size and src_stat.st_mtime <= dest_stat.st_mtime:
+                            should_copy = False
                     except Exception:
-                        raise
+                        pass
+
+                if should_copy:
+                    os.makedirs(os.path.dirname(dest_file), exist_ok=True)
+                    try:
+                        shutil.copy2(src_file, dest_file)
+                    except PermissionError:
+                        try:
+                            if os.path.exists(dest_file):
+                                os.chmod(dest_file, 0o666)
+                                os.remove(dest_file)
+                            shutil.copy2(src_file, dest_file)
+                        except Exception:
+                            raise
+            except Exception as e:
+                failed_files.append((src_file, e))
 
         # Complete progress bar display
         draw_progress(total_files, total_files, "complete", "backing up")
         import sys
         sys.stdout.write("\n")
-        print("backup successfully completed")
+
+        if failed_files:
+            print(f"warning: backup completed with warnings (skipped {len(failed_files)} files)")
+            print("skipped files:")
+            for src, err in failed_files[:5]:
+                print(f"  • {os.path.basename(src)}: {err}")
+            if len(failed_files) > 5:
+                print(f"  ... and {len(failed_files) - 5} more files.")
+        else:
+            print("backup successfully completed")
 
     except Exception as e:
         import sys
