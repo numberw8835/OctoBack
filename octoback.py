@@ -14,6 +14,7 @@ from modules.commands import (
     run_backup,
     run_compress,
     run_uncompress,
+    run_prune,
 )
 
 description_message = """
@@ -138,6 +139,9 @@ def main():
     # 'list' command configuration
     subparsers.add_parser("list", help="List all files in the index using the TUI.")
 
+    # 'prune' command configuration
+    subparsers.add_parser("prune", help="Prune non-existent paths from the index.")
+
     args = parser.parse_args()
 
     setup_logging(verbose=args.verbose)
@@ -152,13 +156,15 @@ def main():
     elif args.command == "init":
         initialize_environment()
     elif args.command == "backup":
-        run_backup(args.verbose)
+        run_backup()
     elif args.command == "compress":
         run_compress()
     elif args.command == "unzip":
         run_uncompress()
     elif args.command == "list":
         list_index()
+    elif args.command == "prune":
+        run_prune()
     else:
         # Fallback to help display if no subcommand or invalid command is entered
         parser.print_help()

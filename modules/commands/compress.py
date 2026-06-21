@@ -48,7 +48,7 @@ def create_tar(vault_path, tar_path):
                         except Exception as e:
                             print(f"failed to add file {file_path} to tar")
     except Exception as e:
-        print("failed to compress the vault")
+        print(f"failed to compress the vault {e}")
 
 
 def run_compress():

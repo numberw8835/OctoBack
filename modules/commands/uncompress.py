@@ -41,11 +41,16 @@ def run_uncompress():
         ) as pbar:
             with tarfile.open(archive_file, "r:gz") as tf:
                 for member in tf.getmembers():
-                    if not member.isfile():
+                    # Security: Prevent Zip Slip/path traversal outside of the vault
+                    target_path = os.path.abspath(os.path.join(vault_path, member.name))
+                    if os.path.commonpath([vault_path, target_path]) != vault_path:
+                        print(f"skipping unsafe path: {member.name}")
                         continue
 
                     tf.extract(member, vault_path)
-                    pbar.update(member.size)
+                    
+                    if member.isfile():
+                        pbar.update(member.size)
 
         print(f"vault has been successfully uncompressed to {vault_path}")
     except Exception as e:

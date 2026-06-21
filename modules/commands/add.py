@@ -18,7 +18,7 @@ def add_to_index(paths, granular=False):
         engine.load_index(index_path)
 
     for path in paths:
-        if granular:
+        if granular and os.path.isdir(path):
             files = engine.controller.scan_folder_for_files(path)
             files = {os.path.abspath(f) for f in files}
             engine.update_index(files)

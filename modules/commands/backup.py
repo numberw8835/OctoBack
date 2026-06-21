@@ -16,7 +16,7 @@ logging.basicConfig(
 )
 
 
-def run_backup(prune: bool = False):
+def run_backup():
     config_path = DEFAULT_CONFIG
 
     if not engine.config.load_config(config_path):
@@ -38,10 +38,7 @@ def run_backup(prune: bool = False):
     sources = set()
     for source in engine.index:
         if not os.path.exists(source):
-            if prune:
-                engine.remove_from_index(source)
-            else:
-                continue
+            continue
         if os.path.isdir(source):
             for root, _, files in os.walk(source):
                 for file in files:
@@ -99,15 +96,19 @@ def run_backup(prune: bool = False):
                     action="backing up ",
                 )
 
+            logging.info(f"backing up {source} to {dest}")
             # Perform the copy with the callback
             success = engine.controller.copy_to(
                 source, dest, progress_callback=update_progress_callback
             )
 
             if success:
+                logging.info(f"successfully backed up {source}")
                 files_completed += 1
             else:
-                print(f"Failed to backup {source}")
+                logging.warning(f"failed to backup {source}")
+                print(f"\nfailed to backup {source}")
+        print()
     finally:
         if lock_file:
             fcntl.flock(lock_file, fcntl.LOCK_UN)

@@ -7,3 +7,4 @@ from modules.commands.list import list_index
 from modules.commands.remove import remove_from_index
 from modules.commands.restore import restore_from_backup
 from modules.commands.uncompress import run_uncompress
+from modules.commands.prune import run_prune

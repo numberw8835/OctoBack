@@ -1,4 +1,5 @@
 import os
+import logging
 from modules.constants import DEFAULT_CONFIG
 from modules.engine import Engine
 from modules.util.paths import get_vault_target_path, get_source_path_from_vault
@@ -85,6 +86,7 @@ def restore_from_backup(path, all_files=False):
     # Copy files and draw progress
     total_files = len(to_restore)
     files_completed = 0
+    failed_files = []
     for vault_file, orig_file in to_restore:
         def update_progress_callback(percent):
             nonlocal files_completed
@@ -98,8 +100,19 @@ def restore_from_backup(path, all_files=False):
 
         # Make sure destination directories exist
         os.makedirs(os.path.dirname(orig_file), exist_ok=True)
+        logging.info(f"restoring {vault_file} to {orig_file}")
         success = engine.controller.copy_to(
             vault_file, orig_file, progress_callback=update_progress_callback
         )
         if success:
+            logging.info(f"successfully restored {orig_file}")
             files_completed += 1
+        else:
+            logging.warning(f"failed to restore {orig_file}")
+            failed_files.append(orig_file)
+    print()
+
+    if failed_files:
+        print("failed to restore files")
+        for f in failed_files:
+            print(f"  {f}")
