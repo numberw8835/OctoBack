@@ -1,6 +1,6 @@
 # 🐙 OctoBack
 
-![OctoBack logo](assets/octoback_logo_clean.png){width=30%}
+<img src="assets/octoback_logo_clean.png" alt="OctoBack logo" width="120" />
 
 OctoBack is a lightweight CLI backup manager that separates the **intent** (what to back up) from the **action** (the actual backup process). By maintaining a curated index of files and folders, OctoBack ensures your backup vault remains organized, predictable, and clean.
 
