@@ -1,19 +1,19 @@
 import argparse
 import logging
 import os
-import sys
 import signal
+import sys
 
 from modules.commands import (
     add_to_index,
+    cleanup_temp_dirs,
+    initialize_environment,
+    list_index,
     remove_from_index,
     restore_from_backup,
-    initialize_environment,
     run_backup,
-    cleanup_temp_dirs,
-    run_zip,
     run_unzip,
-    list_index,
+    run_zip,
 )
 
 description_message = """
@@ -116,10 +116,14 @@ def main():
     )
 
     # Zip command
-    subparsers.add_parser("zip", help="Compress the entire backup vault into a ZIP file.")
+    subparsers.add_parser(
+        "zip", help="Compress the entire backup vault into a ZIP file."
+    )
 
     # Unzip command
-    subparsers.add_parser("unzip", help="Decompress the backup vault ZIP file back to the vault.")
+    subparsers.add_parser(
+        "unzip", help="Decompress the backup vault ZIP file back to the vault."
+    )
 
     # List command
     subparsers.add_parser("list", help="List all files in the index using the TUI.")
@@ -137,7 +141,7 @@ def main():
     elif args.command == "init":
         initialize_environment()
     elif args.command == "backup":
-        run_backup()
+        run_backup(args.verbose)
     elif args.command == "zip":
         run_zip()
     elif args.command == "unzip":
@@ -149,10 +153,11 @@ def main():
 
 
 if __name__ == "__main__":
+
     def signal_handler(sig, frame):
         cleanup_temp_dirs()
         try:
-            sys.stdout.write("\r¬φ\033[K\n")
+            sys.stdout.write("\rExiting... \033[K\n")
             sys.stdout.flush()
         except Exception:
             pass
@@ -165,7 +170,7 @@ if __name__ == "__main__":
     except EOFError:
         cleanup_temp_dirs()
         try:
-            sys.stdout.write("\r¬φ\033[K\n")
+            sys.stdout.write("\rExiting... \033[K\n")
             sys.stdout.flush()
         except Exception:
             pass

@@ -1,5 +1,5 @@
 import os
-import shutil
+
 from modules.constants import DEFAULT_CONFIG
 from modules.engine import Engine
 
@@ -20,8 +20,21 @@ def run_unzip():
         return
 
     try:
-        os.makedirs(vault_path, exist_ok=True)
-        shutil.unpack_archive(zip_file, vault_path, "zip")
+        import zipfile
+
+        from tqdm import tqdm
+
+        def unzip_progress(zip_file, dst):
+            with zipfile.ZipFile(zip_file, "r") as zf:
+                for info in zf.infolist():
+                    zf.extract(info, dst)
+                    pbar.update(1)
+
+        total_files = len(zipfile.ZipFile(zip_file).infolist())
+        with tqdm(total=total_files, desc="Unzipping") as pbar:
+            unzip_progress(zip_file, vault_path)
+            pbar.close()
+
         print(f"vault has been successfully unzipped to {vault_path}")
     except Exception as e:
         print(f"error unzipping vault: {e}")

@@ -1,5 +1,8 @@
 import os
-import shutil
+import zipfile
+
+from tqdm import tqdm
+
 from modules.constants import DEFAULT_CONFIG
 from modules.engine import Engine
 
@@ -21,7 +24,21 @@ def run_zip():
     zip_file = zip_base + ".zip"
 
     try:
-        shutil.make_archive(zip_base, "zip", vault_path)
+
+        def zip_progress(src, dst):
+            with zipfile.ZipFile(dst, "w", zipfile.ZIP_DEFLATED) as zf:
+                for root, dirs, files in os.walk(src):
+                    for file in files:
+                        file_path = os.path.join(root, file)
+                        arcname = os.path.relpath(file_path, src)
+                        zf.write(file_path, arcname=arcname)
+
+        with tqdm(
+            total=sum(len(f) for f in os.listdir(vault_path)), desc="Zipping"
+        ) as pbar:
+            zip_progress(vault_path, zip_file)
+            pbar.close()
+
         print(f"vault has been successfully zipped to {zip_file}")
     except Exception as e:
         print(f"error zipping vault: {e}")

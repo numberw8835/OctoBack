@@ -5,7 +5,30 @@ set -e
 echo "Building standalone binary using PyInstaller..."
 
 # 1. Compile with PyInstaller
-pyinstaller --onefile --name octoback octoback.py
+pyinstaller --onefile --name octoback \
+    --exclude-module numpy \
+    --exclude-module scipy \
+    --exclude-module matplotlib \
+    --exclude-module pandas \
+    --exclude-module sympy \
+    --exclude-module pygraphviz \
+    --exclude-module IPython \
+    --exclude-module jedi \
+    --exclude-module PyQt6 \
+    --exclude-module torch \
+    --exclude-module torchvision \
+    --exclude-module torchaudio \
+    --exclude-module onnxruntime \
+    --exclude-module pyarrow \
+    --exclude-module numba \
+    --exclude-module llvmlite \
+    --exclude-module tkinter \
+    --exclude-module zmq \
+    --exclude-module lxml \
+    --exclude-module qtpy \
+    --exclude-module cryptography \
+    --exclude-module orjson \
+    octoback.py
 
 # 2. Copy binary to ~/.local/bin
 BIN_DIR="$HOME/.local/bin"

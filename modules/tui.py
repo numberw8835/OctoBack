@@ -1,5 +1,6 @@
 import curses
 
+
 def run_tui(items, select_mode=True):
     if not items:
         return [] if select_mode else None
@@ -52,8 +53,12 @@ def run_tui(items, select_mode=True):
                 matches = []
                 match_idx = -1
                 return
-            
-            matches = [i for i, item in enumerate(items) if search_query.lower() in item.lower()]
+
+            matches = [
+                i
+                for i, item in enumerate(items)
+                if search_query.lower() in item.lower()
+            ]
             if matches:
                 if current_idx in matches:
                     match_idx = matches.index(current_idx)
@@ -106,18 +111,33 @@ def run_tui(items, select_mode=True):
                 start_idx = current_idx - visible_height + 1
 
             # 1. Render Header
-            stdscr.addstr(margin_top - 1, margin_left, "OctoBack Restore" if select_mode else "OctoBack Index", curses.A_BOLD | color_info)
+            stdscr.addstr(
+                margin_top - 1,
+                margin_left,
+                "OctoBack Restore" if select_mode else "OctoBack Index",
+                curses.A_BOLD | color_info,
+            )
 
             # 2. Render Box Borders (Fancy Rounded Borders)
             try:
                 # Top border
-                stdscr.addstr(box_top, box_left, "╭" + "─" * (box_right - box_left - 1) + "╮", color_info)
+                stdscr.addstr(
+                    box_top,
+                    box_left,
+                    "╭" + "─" * (box_right - box_left - 1) + "╮",
+                    color_info,
+                )
                 # Side borders
                 for y in range(box_top + 1, box_bottom):
                     stdscr.addstr(y, box_left, "│", color_info)
                     stdscr.addstr(y, box_right, "│", color_info)
                 # Bottom border
-                stdscr.addstr(box_bottom, box_left, "╰" + "─" * (box_right - box_left - 1) + "╯", color_info)
+                stdscr.addstr(
+                    box_bottom,
+                    box_left,
+                    "╰" + "─" * (box_right - box_left - 1) + "╯",
+                    color_info,
+                )
             except Exception:
                 pass
 
@@ -125,7 +145,7 @@ def run_tui(items, select_mode=True):
             for i in range(min(visible_height, len(items) - start_idx)):
                 idx = start_idx + i
                 item_text = items[idx]
-                is_current = (idx == current_idx)
+                is_current = idx == current_idx
                 is_selected = selected[idx]
 
                 y = box_top + 1 + i
@@ -140,7 +160,7 @@ def run_tui(items, select_mode=True):
                     max_text_len = box_right - box_left - 4
 
                 if len(item_text) > max_text_len:
-                    display_text = item_text[:max_text_len - 3] + "..."
+                    display_text = item_text[: max_text_len - 3] + "..."
                 else:
                     display_text = item_text
 
@@ -156,31 +176,43 @@ def run_tui(items, select_mode=True):
                 else:
                     # Draw normal row with checkmarks and search highlight
                     stdscr.addstr(y, box_left + 1, f" {bullet} ", curses.A_NORMAL)
-                    
+
                     if select_mode:
                         if is_selected:
-                            stdscr.addstr(y, box_left + 4, chk_box, color_selected | curses.A_BOLD)
+                            stdscr.addstr(
+                                y, box_left + 4, chk_box, color_selected | curses.A_BOLD
+                            )
                         else:
                             stdscr.addstr(y, box_left + 4, chk_box, curses.A_NORMAL)
                         stdscr.addstr(y, box_left + 7, " ", curses.A_NORMAL)
                         text_x = box_left + 8
                     else:
                         text_x = box_left + 4
-                    
+
                     active_query = search_query if search_mode else last_search_query
                     matched = False
                     if active_query:
                         pos = display_text.lower().find(active_query.lower())
                         if pos != -1:
                             prefix = display_text[:pos]
-                            match_part = display_text[pos:pos+len(active_query)]
-                            suffix = display_text[pos+len(active_query):]
-                            
+                            match_part = display_text[pos : pos + len(active_query)]
+                            suffix = display_text[pos + len(active_query) :]
+
                             stdscr.addstr(y, text_x, prefix, curses.A_NORMAL)
-                            stdscr.addstr(y, text_x + len(prefix), match_part, color_match | curses.A_BOLD)
-                            stdscr.addstr(y, text_x + len(prefix) + len(match_part), suffix, curses.A_NORMAL)
+                            stdscr.addstr(
+                                y,
+                                text_x + len(prefix),
+                                match_part,
+                                color_match | curses.A_BOLD,
+                            )
+                            stdscr.addstr(
+                                y,
+                                text_x + len(prefix) + len(match_part),
+                                suffix,
+                                curses.A_NORMAL,
+                            )
                             matched = True
-                    
+
                     if not matched:
                         stdscr.addstr(y, text_x, display_text, curses.A_NORMAL)
 
@@ -188,7 +220,7 @@ def run_tui(items, select_mode=True):
             status_y = box_bottom + 1
             stdscr.move(status_y, 0)
             stdscr.clrtoeol()
-            
+
             if select_mode:
                 status_text = f"  {current_idx + 1}/{len(items)} | Selected: {sum(selected)}/{len(items)}"
             else:
@@ -200,7 +232,7 @@ def run_tui(items, select_mode=True):
                     status_text += f" | Match {match_idx + 1}/{len(matches)}"
                 else:
                     status_text += " | No matches"
-            
+
             stdscr.addstr(status_y, margin_left, status_text, curses.A_DIM)
 
             # 5. Render Footer (Command Help or Search Prompt)
@@ -250,7 +282,7 @@ def run_tui(items, select_mode=True):
                     if matches:
                         match_idx = (match_idx - 1) % len(matches)
                         current_idx = matches[match_idx]
-                elif key in [curses.KEY_BACKSPACE, 127, 8, ord('\b')]:
+                elif key in [curses.KEY_BACKSPACE, 127, 8, ord("\b")]:
                     if len(search_query) > 0:
                         search_query = search_query[:-1]
                         update_search()
@@ -303,7 +335,11 @@ def run_tui(items, select_mode=True):
                 elif key == ord("n"):
                     pending_g = False
                     if last_search_query:
-                        matches = [i for i, item in enumerate(items) if last_search_query.lower() in item.lower()]
+                        matches = [
+                            i
+                            for i, item in enumerate(items)
+                            if last_search_query.lower() in item.lower()
+                        ]
                         if matches:
                             next_matches = [m for m in matches if m > current_idx]
                             if next_matches:
@@ -314,7 +350,11 @@ def run_tui(items, select_mode=True):
                 elif key == ord("N"):
                     pending_g = False
                     if last_search_query:
-                        matches = [i for i, item in enumerate(items) if last_search_query.lower() in item.lower()]
+                        matches = [
+                            i
+                            for i, item in enumerate(items)
+                            if last_search_query.lower() in item.lower()
+                        ]
                         if matches:
                             prev_matches = [m for m in matches if m < current_idx]
                             if prev_matches:
