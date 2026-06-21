@@ -58,12 +58,16 @@ Rather than transferring files on the fly, you curate an index of important fold
   octoback add folder/
   ```
   If no directory is specified, it defaults to the current directory (`.`).
+  > [!NOTE]
+  > This indexes the folder itself as a single unit. It dynamically tracks and backs up any new files added to the folder in the future. However, in the interactive TUI restore screen, the folder can only be restored as a single unit.
 
-* **Recursive Indexing**:
+* **Granular Indexing**:
   ```bash
-  octoback add -R folder/
+  octoback add -g folder/
   ```
-  The `-R` flag scans the directory and indexes all subfolders and files individually for granular restore control.
+  The `-g` flag scans the directory and indexes all subfolders and files individually.
+  > [!NOTE]
+  > This allows you to selectively restore individual files in the TUI restore mode. However, newly created files inside this folder will not be tracked or backed up in the future unless you re-run `octoback add -g`.
 
 ### 3. The Execution Phase
 Trigger the backup sync using:

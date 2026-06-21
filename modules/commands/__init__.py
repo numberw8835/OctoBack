@@ -1,3 +1,4 @@
+# Package initializer exposing command handlers for direct execution by the CLI entrypoint (octoback.py)
 from modules.commands.init import initialize_environment
 from modules.commands.add import add_to_index
 from modules.commands.remove import remove_from_index

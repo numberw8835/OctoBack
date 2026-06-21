@@ -4,6 +4,7 @@ import os
 import signal
 import sys
 
+# Import command controllers from commands module
 from modules.commands import (
     add_to_index,
     cleanup_temp_dirs,
@@ -24,13 +25,19 @@ backup vault remains organized and predictable.
 
 
 def setup_logging(verbose=False):
+    """
+    Sets up custom logging format and levels.
+    If verbose is True, configures standard output logger with prefix formatting.
+    """
     root_logger = logging.getLogger()
+    # Clear any existing active log handlers to avoid duplicates
     for handler in root_logger.handlers[:]:
         root_logger.removeHandler(handler)
 
     if verbose:
         handler = logging.StreamHandler()
 
+        # Custom logging formatter that appends tags depending on message severity
         class OctoFormatter(logging.Formatter):
             def format(self, record):
                 if record.levelno == logging.INFO:
@@ -47,10 +54,14 @@ def setup_logging(verbose=False):
         root_logger.addHandler(handler)
         root_logger.setLevel(logging.INFO)
     else:
+        # If verbose mode is off, suppress log output (disable logs below CRITICAL+1)
         root_logger.setLevel(logging.CRITICAL + 1)
 
 
 def main():
+    """
+    CLI command dispatcher. Parses input arguments and triggers subcommand handlers.
+    """
     parser = argparse.ArgumentParser(
         description=description_message, usage="%(prog)s [command] [options]"
     )
@@ -61,10 +72,10 @@ def main():
         help="Enable verbose logging",
     )
 
-    # Subparsers for different commands
+    # Subparsers for commands
     subparsers = parser.add_subparsers(dest="command", help="commands")
 
-    # Add command
+    # 'add' command configuration
     add_parser = subparsers.add_parser("add", help="Add a directory to the index.")
     add_parser.add_argument(
         "add",
@@ -73,14 +84,16 @@ def main():
         default=["."],
         help="Directory paths or folder names (current directory if not specified)",
     )
+    # The -g/--granular flag replaced the confusing -R/--recursive flag.
+    # It allows indexing files individually (for selective TUI restoration) instead of tracking folders as a single dynamic unit.
     add_parser.add_argument(
-        "-R",
-        "--recursive",
+        "-g",
+        "--granular",
         action="store_true",
-        help="Perform the operation recursively",
+        help="Index files individually for granular restore control",
     )
 
-    # Restore command
+    # 'restore' command configuration
     restore_parser = subparsers.add_parser(
         "restore", help="Restore a specific directory from the backup."
     )
@@ -95,15 +108,15 @@ def main():
         "--all", action="store_true", help="Restore all files in the directory"
     )
 
-    # Init command
+    # 'init' command configuration
     subparsers.add_parser(
         "init", help="Initialize the environment and create the configuration file."
     )
 
-    # Backup command
+    # 'backup' command configuration
     subparsers.add_parser("backup", help="Run the backup process based on the index.")
 
-    # Remove command
+    # 'remove' command configuration
     remove_parser = subparsers.add_parser(
         "remove", aliases=["rm"], help="Remove a directory or file from the index."
     )
@@ -115,25 +128,26 @@ def main():
         help="Directory or file paths to remove (defaults to current directory if not specified)",
     )
 
-    # Zip command
+    # 'zip' command configuration
     subparsers.add_parser(
         "zip", help="Compress the entire backup vault into a ZIP file."
     )
 
-    # Unzip command
+    # 'unzip' command configuration
     subparsers.add_parser(
         "unzip", help="Decompress the backup vault ZIP file back to the vault."
     )
 
-    # List command
+    # 'list' command configuration
     subparsers.add_parser("list", help="List all files in the index using the TUI.")
 
     args = parser.parse_args()
 
     setup_logging(verbose=args.verbose)
 
+    # Dispatch parsed subcommands to their respective helper functions
     if args.command == "add":
-        add_to_index(args.add, recursive=args.recursive)
+        add_to_index(args.add, granular=args.granular)
     elif args.command in ["remove", "rm"]:
         remove_from_index(args.path)
     elif args.command == "restore":
@@ -149,11 +163,12 @@ def main():
     elif args.command == "list":
         list_index()
     else:
+        # Fallback to help display if no subcommand or invalid command is entered
         parser.print_help()
 
 
 if __name__ == "__main__":
-
+    # Signal interrupt trap handler (Ctrl-C)
     def signal_handler(sig, frame):
         cleanup_temp_dirs()
         try:
@@ -163,11 +178,13 @@ if __name__ == "__main__":
             pass
         os._exit(130)
 
+    # Attach SIGINT signal listener
     signal.signal(signal.SIGINT, signal_handler)
 
     try:
         main()
     except EOFError:
+        # Handle Ctrl-D (EOF) exit
         cleanup_temp_dirs()
         try:
             sys.stdout.write("\rExiting... \033[K\n")

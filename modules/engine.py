@@ -5,20 +5,27 @@ import os
 from modules.util.config import Config
 from modules.util.controller import Controller
 
+# Configure logging format for core system engine operations
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
 
 class Engine:
+    """
+    The orchestrating core of OctoBack. Combines Config, Controller, and Index state,
+    and manages path transformations (portable paths using '~' vs absolute system paths).
+    """
     def __init__(self) -> None:
-        self.index = set()  # set of absolute paths
+        # In-memory storage of absolute file/directory paths currently in the index
+        self.index = set()  
         self.config = Config()
         self.controller = Controller()
 
     def to_portable_path(self, path: str) -> str:
         """
         Converts absolute home-directory paths to portable '~/'-relative paths.
+        This makes index databases transferrable between different users and system environments.
         """
         abs_path = os.path.abspath(path)
         home = os.path.expanduser("~")
@@ -31,6 +38,7 @@ class Engine:
     def from_portable_path(self, path: str) -> str:
         """
         Converts portable '~/'-relative paths to absolute home-directory paths.
+        This resolves the index paths to local system paths for backups and restores.
         """
         if path == "~":
             return os.path.expanduser("~")
@@ -40,7 +48,7 @@ class Engine:
 
     def add_folder_to_index(self, directory: str):
         """
-        Adds a folder/file to the index.
+        Adds a folder/file to the index. Normalizes path to absolute path.
         """
         abs_path = os.path.abspath(directory)
         if abs_path in self.index:
@@ -51,7 +59,8 @@ class Engine:
 
     def update_index(self, stuff: set):
         """
-        Updates the index with new files.
+        Updates the index with a set of new files.
+        Uses set difference to identify and print info about new entries.
         """
         new_files = stuff - self.index
         if not new_files:
@@ -62,12 +71,14 @@ class Engine:
 
     def remove_from_index(self, path: str) -> bool:
         """
-        Removes a path (file or folder) and its children from the index.
+        Removes a path (file or folder) and its children recursively from the index.
+        Matches exact paths and nested child paths using path separator checking (os.sep).
         Returns True if any entries were removed, False otherwise.
         """
         abs_target = os.path.abspath(path)
         initial_len = len(self.index)
 
+        # Filters index by excluding target path or any path starting with "target_path/"
         self.index = {
             indexed_path
             for indexed_path in self.index
@@ -84,15 +95,19 @@ class Engine:
 
     def save_index(self, path):
         """
-        Writes the index to a file on disk.
+        Writes the index set to a JSON file on disk.
+        Converts absolute paths to portable paths (e.g. ~/Document) prior to serialization.
         """
         try:
+            # Ensure index base directory exists
             dir_name = os.path.dirname(path)
             if not os.path.exists(dir_name):
                 os.makedirs(dir_name, exist_ok=True)
+            
+            # Use atomic temp write and swap pattern
             tmp_path = path + ".tmp"
             
-            # Serialize to portable paths
+            # Serialize the absolute system paths to portable '~/'-relative strings
             portable_data = [self.to_portable_path(p) for p in self.index]
 
             with open(tmp_path, "w") as f:
@@ -104,16 +119,19 @@ class Engine:
 
     def load_index(self, path):
         """
-        Loads the index from a file on disk with backwards compatibility.
+        Loads the index from a file on disk.
+        Provides backward compatibility for older tuple/list index database schemas.
         """
         try:
             with open(path, "r") as f:
                 data = json.load(f)
                 self.index.clear()
                 for item in data:
+                    # Handles standard string format in newer databases
                     if isinstance(item, str):
                         abs_p = self.from_portable_path(item)
                         self.index.add(abs_p)
+                    # Backwards compatibility: handles list/tuple formatting in older databases
                     elif isinstance(item, (list, tuple)) and len(item) >= 1:
                         abs_p = self.from_portable_path(item[0])
                         self.index.add(abs_p)

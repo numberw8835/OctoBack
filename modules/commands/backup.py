@@ -19,38 +19,47 @@ def cleanup_temp_dirs():
 
 
 def run_backup(verbose: bool):
-    # Load the default configuration and check if it exists
+    """
+    Orchestrates the backup process:
+    1. Loads configuration.
+    2. Gathers files to backup recursively from indexed entries.
+    3. Acquires a lockfile to prevent concurrent backups.
+    4. Groups files into home-relative or root-relative batches.
+    5. Triggers rsync batch copying.
+    """
+    # Load configuration; check environment is initialized
     if not engine.config.load_config(DEFAULT_CONFIG):
         print("error: config file not found, please run 'octoback init' first.")
         return
 
-    # Retrieve paths from the configuration
+    # Retrieve paths from configuration
     vault_path = engine.config.configuration["storage"]["vault_path"]
     index_path = engine.config.configuration["storage"]["index_path"]
 
-    # Load the index if it exists
+    # Load existing indexed paths
     if os.path.exists(index_path):
         engine.load_index(index_path)
 
-    # Check if the index is empty
     if not engine.index:
         print("index is empty, nothing to backup")
         return
 
-    # 1. Collect all source files from indexed files/folders
+    # 1. Collect all individual source files recursively from indexed files/folders
     all_source_files = set()
     for path in engine.index:
         if not os.path.exists(path):
-            # engine.index.remove(path)
             continue
+        # If the indexed item is a directory, traverse it to collect all files inside
         if os.path.isdir(path):
             for root_dir, _, files in os.walk(path):
                 for f in files:
                     abs_f = os.path.abspath(os.path.join(root_dir, f))
                     all_source_files.add(abs_f)
+        # If it is a file, add it directly
         else:
             all_source_files.add(os.path.abspath(path))
 
+    # Sort files to ensure deterministic backup ordering
     unique_source_files = sorted(list(all_source_files))
     total_files = len(unique_source_files)
     if total_files == 0:
@@ -59,7 +68,7 @@ def run_backup(verbose: bool):
     else:
         print(f"{total_files} files found!")
 
-    # 2. Acquire lockfile to prevent concurrent backups
+    # 2. Acquire a flock lockfile to prevent multiple backup instances from running concurrently
     lock_file_path = os.path.join(OCTO_DIR, "backup.lock")
     try:
         global lock_file
@@ -72,7 +81,7 @@ def run_backup(verbose: bool):
         print(f"failed to acquire backup lock: {e}")
         return
 
-    # Disable logging warnings from internal operations temporarily during backup progress bar
+    # Temporarily raise logging level to suppress warnings while drawing the progress bar
     root_logger = logging.getLogger()
     old_level = root_logger.level
     root_logger.setLevel(logging.WARNING)
@@ -81,7 +90,8 @@ def run_backup(verbose: bool):
     global_idx = 0
 
     try:
-        # Group files into Home relative paths and Root relative paths
+        # Group files into home-relative paths and system-root relative paths
+        # This allows running separate optimized rsync calls
         home_source = os.path.expanduser("~")
         root_source = "/"
 
@@ -102,7 +112,10 @@ def run_backup(verbose: bool):
                 return
             
             os.makedirs(dest_dir, exist_ok=True)
-            cmd = ["rsync", "-aH", "--from0", "--files-from=-", source_dir, dest_dir]
+            # We use rsync with double verbosity (-aHvv). 
+            # -vv ensures that rsync outputs a status line for *every* file it visits,
+            # regardless of whether the file was transferred (copied) or is already up-to-date.
+            cmd = ["rsync", "-aHvv", "--from0", "--files-from=-", source_dir, dest_dir]
             
             proc = subprocess.Popen(
                 cmd,
@@ -112,22 +125,51 @@ def run_backup(verbose: bool):
                 text=True
             )
             
+            # Feed the relative paths of the files to rsync's stdin using NUL (\0) delimiter.
             for src_file, rel_path in file_tuples:
                 try:
                     proc.stdin.write(rel_path + "\0")
                 except IOError:
                     break
-                global_idx += 1
-                if global_idx % 200 == 0 or global_idx == total_files:
-                    draw_progress(global_idx, total_files, os.path.basename(src_file), "backing up")
                     
+            # Close stdin so rsync knows we have finished sending the list of files to process.
             try:
                 proc.stdin.close()
             except IOError:
                 pass
                 
-            stdout, stderr = proc.communicate()
+            # Create a lookup mapping (relative path -> absolute source path) for easy filename parsing.
+            rel_map = {rel_path: src_file for src_file, rel_path in file_tuples}
             
+            # Read stdout line-by-line in real-time as rsync processes each file.
+            while True:
+                line = proc.stdout.readline()
+                if not line:
+                    break
+                cleaned = line.strip()
+                matched_rel = None
+                
+                # Case 1: File is already up-to-date and skipped.
+                # rsync outputs: "<relative_path> is uptodate"
+                if cleaned.endswith(" is uptodate"):
+                    rel_p = cleaned[:-12]
+                    if rel_p in rel_map:
+                        matched_rel = rel_p
+                # Case 2: File is actually transferred.
+                # rsync outputs: "<relative_path>"
+                else:
+                    if cleaned in rel_map:
+                        matched_rel = cleaned
+                
+                # If the line represents a processed file, increment the progress index and update the bar.
+                if matched_rel:
+                    global_idx += 1
+                    draw_progress(global_idx, total_files, os.path.basename(rel_map[matched_rel]), "backing up")
+            
+            # Wait for rsync to terminate and retrieve stderr
+            _, stderr = proc.communicate()
+            
+            # Parse stderr to collect information on any failed file transfers
             if proc.returncode != 0 and stderr:
                 for line in stderr.splitlines():
                     if line.startswith("rsync:"):
