@@ -1,11 +1,10 @@
 import fcntl
 import logging
 import os
-from genericpath import exists
 
 from modules.constants import DEFAULT_CONFIG, OCTO_DIR
 from modules.engine import Engine
-from modules.ui import draw_progress
+from modules.ui import draw_progress, human_readable_size
 from modules.util.paths import get_vault_target_path
 
 engine = Engine()
@@ -35,20 +34,9 @@ def run_backup():
         print("index is empty, nothing to backup")
         return
 
-    sources = set()
-    for source in engine.index:
-        if not os.path.exists(source):
-            continue
-        if os.path.isdir(source):
-            for root, _, files in os.walk(source):
-                for file in files:
-                    file_path = os.path.join(root, file)
-                    sources.add(file_path)
-        elif os.path.isfile(source) and not os.path.islink(source):
-            sources.add(source)
-
+    sources = [s for s in engine.index if os.path.exists(s)]
     total_files = len(sources)
-    logging.info(f"{total_files} files found and ready for backing up")
+    logging.info(f"{total_files} items found and ready for backing up")
 
     # Aquire a lock to prevent concurrent backups
 
@@ -74,26 +62,48 @@ def run_backup():
             print(f"failed to create vault {e}")
             return
 
-        total_bytes = 0
-        for source in sources:
-            if os.path.isfile(source):
-                total_bytes += os.path.getsize(source)
+        # Copy the items to the vault
+        def get_path_size(path):
+            if os.path.isfile(path):
+                return os.path.getsize(path)
+            total = 0
+            for root, _, files in os.walk(path):
+                for f in files:
+                    fp = os.path.join(root, f)
+                    if not os.path.islink(fp):
+                        try:
+                            total += os.path.getsize(fp)
+                        except OSError:
+                            pass
+            return total
 
-        # Copy the files to the vault
         files_completed = 0
         for source in sources:
             dest = get_vault_target_path(source, vault_path)
+            source_size = get_path_size(source)
 
-            # Define callback for the current file's progress
-            def update_progress_callback(percent):
+            # Define callback for the current item's progress
+            def update_progress_callback(percent, current_bytes=0, total_bytes=0):
                 nonlocal files_completed
-                # Calculate global percentage: (completed files + progress of current) / total
+                # Calculate global percentage: (completed items + progress of current) / total
                 global_progress = (files_completed + percent) / total_files
+                
+                if total_bytes == 0:
+                    total_bytes = source_size
+                    current_bytes = int(source_size * percent)
+
+                extra_info = ""
+                if total_bytes > 0:
+                    curr_str = human_readable_size(current_bytes)
+                    tot_str = human_readable_size(total_bytes)
+                    extra_info = f"({curr_str} / {tot_str} | {int(percent * 100)}%)"
+
                 draw_progress(
                     index=int(global_progress * 100),
                     total=100,
                     current_file=os.path.basename(source),
                     action="backing up ",
+                    extra_info=extra_info,
                 )
 
             logging.info(f"backing up {source} to {dest}")
@@ -107,7 +117,6 @@ def run_backup():
                 files_completed += 1
             else:
                 logging.warning(f"failed to backup {source}")
-                print(f"\nfailed to backup {source}")
         print()
     finally:
         if lock_file:

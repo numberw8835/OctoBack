@@ -61,12 +61,14 @@ class Controller:
         logging.info("Paths are identical up to the common prefix.")
         return (split_path_A[min_len:], split_path_B[min_len:])
 
-    def copy_to(self, pathA: str, pathB: str, progress_callback=None) -> bool:
+    def copy_to(self, pathA: str, pathB: str, progress_callback=None):
         """
         Copies source A to destination B, using rsync.
         Supports a callback for real-time percentage updates from rsync's progress2 output.
         """
+
         # Verify that the source path exists
+
         if not os.path.exists(pathA):
             logging.error(f"Source {pathA} does not exist.")
             return False
@@ -74,6 +76,7 @@ class Controller:
         logging.info(f"source {pathA} located")
 
         # Ensure the parent directory structure of the destination exists or create it
+
         dest_dir = os.path.dirname(pathB)
         if not os.path.exists(dest_dir):
             try:
@@ -86,20 +89,21 @@ class Controller:
         logging.info(f"destination {dest_dir} located")
 
         # Build the rsync command. Append a trailing slash if copying a directory.
+
         src = f"{pathA}/" if os.path.isdir(pathA) else pathA
         command = [
             "rsync",
-            "-avhH",
+            "-avH",
             "--info=progress2",
             src,
             pathB,
         ]
 
-        # Regex to capture the percentage from rsync --info=progress2 output (e.g., " 45%")
+        # Regex fallback to capture the percentage from rsync --info=progress2 output (e.g., " 45%")
         progress_re = re.compile(r"(\d+)%")
 
         try:
-            # Use Popen to read stdout line-by_line while the process is running
+            # Use Popen to read stdout line-by-line while the process is running
             process = subprocess.Popen(
                 command,
                 stdout=subprocess.PIPE,
@@ -107,13 +111,38 @@ class Controller:
                 text=True,
                 bufsize=1,
             )
+            files_transferred = 0
             for line in process.stdout or []:
+                xfr_match = re.search(r"xfr#(\d+)", line)
+                if xfr_match:
+                    files_transferred = max(files_transferred, int(xfr_match.group(1)))
+
                 if progress_callback:
-                    match = progress_re.search(line)
-                    if match:
-                        # Extract percentage and convert to 0.0-1.0 scale
-                        percent = float(match.group(1)) / 100.0
-                        progress_callback(percent)
+                    parts = line.strip().split()
+                    if len(parts) >= 2 and parts[1].endswith("%") and parts[1][:-1].isdigit():
+                        try:
+                            # Parse raw byte number and percentage from progress2 output
+                            size_str = parts[0].upper()
+                            units = {"K": 1024, "M": 1024**2, "G": 1024**3, "T": 1024**4}
+                            if size_str and size_str[-1] in units:
+                                curr_bytes = int(float(size_str[:-1]) * units[size_str[-1]])
+                            else:
+                                curr_bytes = int(float(size_str.replace(",", "")))
+                            pct = int(parts[1][:-1])
+                            percent = pct / 100.0
+                            total_bytes = int(curr_bytes * 100 / pct) if pct > 0 else 0
+                            progress_callback(percent, curr_bytes, total_bytes)
+                        except Exception:
+                            # Fallback if raw parse fails
+                            match = progress_re.search(line)
+                            if match:
+                                percent = float(match.group(1)) / 100.0
+                                progress_callback(percent, 0, 0)
+                    else:
+                        match = progress_re.search(line)
+                        if match:
+                            percent = float(match.group(1)) / 100.0
+                            progress_callback(percent, 0, 0)
 
             process.wait()
 
@@ -230,3 +259,4 @@ class Controller:
         except Exception as e:
             logging.error(f"Failed to extract {target} from {path_to_tar}: {e}")
             return False
+

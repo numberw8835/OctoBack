@@ -142,6 +142,7 @@ def main():
     # 'prune' command configuration
     subparsers.add_parser("prune", help="Prune non-existent paths from the index.")
 
+
     args = parser.parse_args()
 
     setup_logging(verbose=args.verbose)

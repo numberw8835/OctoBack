@@ -1,15 +1,17 @@
 import os
+
 from modules.constants import DEFAULT_CONFIG
 from modules.engine import Engine
 
 engine = Engine()
+
 
 def run_prune():
     if not engine.config.load_config(DEFAULT_CONFIG):
         print("config file not found")
         return
     index_path = engine.config.configuration["storage"]["index_path"]
-    
+
     if os.path.exists(index_path):
         engine.load_index(index_path)
     else:

@@ -1,11 +1,13 @@
-import os
 import logging
+import os
+
 from modules.constants import DEFAULT_CONFIG
 from modules.engine import Engine
-from modules.util.paths import get_vault_target_path, get_source_path_from_vault
-from modules.ui import draw_progress
+from modules.ui import draw_progress, human_readable_size
+from modules.util.paths import get_vault_target_path
 
 engine = Engine()
+
 
 def restore_from_backup(path, all_files=False):
     if not engine.config.load_config(DEFAULT_CONFIG):
@@ -18,21 +20,12 @@ def restore_from_backup(path, all_files=False):
     if os.path.exists(index_path):
         engine.load_index(index_path)
 
+    # Collect top-level vault target directories and their corresponding original paths
     file_list = []
     for source in engine.index:
         vault_target = get_vault_target_path(source, vault_path)
-        if not os.path.exists(vault_target):
-            continue
-
-        if os.path.isdir(vault_target):
-            for root, _, files in os.walk(vault_target):
-                for file in files:
-                    vault_file = os.path.join(root, file)
-                    orig_file = get_source_path_from_vault(vault_file, vault_path)
-                    file_list.append((vault_file, orig_file))
-        elif os.path.isfile(vault_target):
-            orig_file = get_source_path_from_vault(vault_target, vault_path)
-            file_list.append((vault_target, orig_file))
+        if os.path.exists(vault_target):
+            file_list.append((vault_target, os.path.abspath(source)))
 
     # Control flow: search/filter files to restore based on input path
     to_restore = []
@@ -51,8 +44,9 @@ def restore_from_backup(path, all_files=False):
 
         matching_paths.sort()
         rel_paths = [os.path.relpath(p, cwd) for p in matching_paths]
-        
+
         from modules.tui import run_tui
+
         selected_rel = run_tui(rel_paths)
         if not selected_rel:
             print("no files selected")
@@ -60,42 +54,61 @@ def restore_from_backup(path, all_files=False):
 
         selected_abs = {os.path.abspath(os.path.join(cwd, p)) for p in selected_rel}
         for vault_file, orig_file in file_list:
-            matched = False
-            for abs_path in selected_abs:
-                if orig_file == abs_path or orig_file.startswith(abs_path + os.sep):
-                    matched = True
-                    break
-            if matched:
-                to_restore.append((vault_file, orig_file))
-    elif path:
-        abs_target = os.path.abspath(path)
-        for vault_file, orig_file in file_list:
-            if orig_file == abs_target or orig_file.startswith(abs_target + os.sep):
+            if orig_file in selected_abs:
                 to_restore.append((vault_file, orig_file))
     else:
-        # Default to restoring current directory
-        abs_target = os.getcwd()
-        for vault_file, orig_file in file_list:
-            if orig_file == abs_target or orig_file.startswith(abs_target + os.sep):
-                to_restore.append((vault_file, orig_file))
+        # Default to restoring specific path or current directory
+        target = path if path else os.getcwd()
+        abs_target = os.path.abspath(target)
+        vault_file = get_vault_target_path(abs_target, vault_path)
+        if os.path.exists(vault_file):
+            to_restore.append((vault_file, abs_target))
 
     if not to_restore:
         print("nothing to restore")
         return
 
     # Copy files and draw progress
+    def get_path_size(path):
+        if os.path.isfile(path):
+            return os.path.getsize(path)
+        total = 0
+        for root, _, files in os.walk(path):
+            for f in files:
+                fp = os.path.join(root, f)
+                if not os.path.islink(fp):
+                    try:
+                        total += os.path.getsize(fp)
+                    except OSError:
+                        pass
+        return total
+
     total_files = len(to_restore)
     files_completed = 0
     failed_files = []
     for vault_file, orig_file in to_restore:
-        def update_progress_callback(percent):
+        source_size = get_path_size(vault_file)
+
+        def update_progress_callback(percent, current_bytes=0, total_bytes=0):
             nonlocal files_completed
             global_progress = (files_completed + percent) / total_files
+
+            if total_bytes == 0:
+                total_bytes = source_size
+                current_bytes = int(source_size * percent)
+
+            extra_info = ""
+            if total_bytes > 0:
+                curr_str = human_readable_size(current_bytes)
+                tot_str = human_readable_size(total_bytes)
+                extra_info = f"({curr_str} / {tot_str} | {int(percent * 100)}%)"
+
             draw_progress(
                 index=int(global_progress * 100),
                 total=100,
                 current_file=os.path.basename(orig_file),
                 action="restoring ",
+                extra_info=extra_info,
             )
 
         # Make sure destination directories exist
