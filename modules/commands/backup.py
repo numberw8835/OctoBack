@@ -11,7 +11,7 @@ engine = Engine()
 lock_file = None
 
 
-def run_backup(paths, all=False):
+def run_backup():
     config_path = DEFAULT_CONFIG
 
     if not engine.config.load_config(config_path):
@@ -31,27 +31,10 @@ def run_backup(paths, all=False):
         print("index is empty, nothing to backup")
         return
 
-    if all:
-        sources = [s for s in engine.index if os.path.exists(s)]
-        total_files = len(sources)
-        logging.info(f"{total_files} items found and ready for backing up")
-    else:
-        expanded_paths = set()
-        for s in paths:
-            if s == ".":
-                # Handle current directory as a special case
-                expanded_paths.add(os.path.abspath(s))
-        sources = {
-            os.path.abspath(s)
-            for s in expanded_paths
-            if os.path.abspath(s) in engine.index and os.path.exists(s)
-        }
-        total_files = len(sources)
-        if total_files < len(expanded_paths):
-            not_in_index = set(expanded_paths).difference(sources)
-            print(f"{not_in_index}, are not in the index, therefore not backed up")
-            logging.info(f"{len(not_in_index)} items not in index and not backed up")
-        logging.info(f"{total_files} items found and ready for backing up")
+    sources = [s for s in engine.index if os.path.exists(s)]
+    total_files = len(sources)
+    logging.info(f"{total_files} items found and ready for backing up")
+
     # Aquire a lock to prevent concurrent backups
 
     lock_file_path = os.path.join(OCTO_DIR, "backup.lock")
