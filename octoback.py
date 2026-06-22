@@ -214,7 +214,7 @@ if __name__ == "__main__":
 
     try:
         main()
-    except (KeyboardInterrupt, SystemExit):
+    except KeyboardInterrupt:
         try:
             from modules.ui import print_error
             print()
@@ -222,6 +222,15 @@ if __name__ == "__main__":
         except Exception:
             sys.stdout.write("\n⊥ Interrupted\n")
         sys.exit(130)
+    except SystemExit as e:
+        if getattr(e, "code", None) == 130:
+            try:
+                from modules.ui import print_error
+                print()
+                print_error("Interrupted")
+            except Exception:
+                sys.stdout.write("\n⊥ Interrupted\n")
+        sys.exit(e.code if e.code is not None else 0)
     except EOFError:
         # Handle Ctrl-D (EOF) exit
         try:

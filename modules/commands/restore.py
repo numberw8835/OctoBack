@@ -69,9 +69,26 @@ def restore_from_backup(path, all_files=False):
         # Default to restoring specific path or current directory
         target = path if path else os.getcwd()
         abs_target = os.path.abspath(target)
-        vault_file = get_vault_target_path(abs_target, vault_path)
-        if os.path.exists(vault_file):
-            to_restore.append((vault_file, abs_target))
+        
+        # Find all indexed paths that are at or under abs_target
+        matching_indexed = []
+        for s in engine.index:
+            if s == abs_target or s.startswith(abs_target + os.sep):
+                matching_indexed.append(s)
+        
+        if matching_indexed:
+            # Restore the matched indexed paths
+            for s in matching_indexed:
+                vault_file = get_vault_target_path(s, vault_path)
+                if os.path.exists(vault_file):
+                    to_restore.append((vault_file, s))
+        else:
+            # If target itself is inside an indexed folder, restore the target itself
+            is_inside_indexed = any(abs_target.startswith(idx + os.sep) for idx in engine.index)
+            if is_inside_indexed:
+                vault_file = get_vault_target_path(abs_target, vault_path)
+                if os.path.exists(vault_file):
+                    to_restore.append((vault_file, abs_target))
 
     if not to_restore:
         print_warning("Nothing to restore")
