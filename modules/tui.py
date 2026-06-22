@@ -47,7 +47,7 @@ def run_tui(items, select_mode=True):
 
             # Show instructions
             if select_mode:
-                stdscr.addstr(max_y - 2, 2, "j/k: move • space: select • enter: confirm • q: quit")
+                stdscr.addstr(max_y - 2, 2, "j/k: move • space: select • enter: confirm • o: restore .octoback • q: quit")
             else:
                 stdscr.addstr(max_y - 2, 2, "j/k: move • enter/q: quit")
 
@@ -61,6 +61,8 @@ def run_tui(items, select_mode=True):
                 current_idx = (current_idx + 1) % len(items)
             elif key == ord(' ') and select_mode:
                 selected[current_idx] = not selected[current_idx]
+            elif key == ord('o') and select_mode:
+                return "__restore_octoback__"
             elif key in [10, 13]:  # Enter
                 break
             elif key in [ord('q'), 27]:  # Esc or q

@@ -11,7 +11,7 @@ engine = Engine()
 lock_file = None
 
 
-def run_backup():
+def run_backup(paths=None, all=False):
     config_path = DEFAULT_CONFIG
 
     if not engine.config.load_config(config_path):
@@ -26,12 +26,39 @@ def run_backup():
     if os.path.exists(index_path):
         engine.load_index(index_path)
 
+    # Check if .octoback is in the index. If not, add it and print the message.
+    octo_dir_abs = os.path.abspath(OCTO_DIR)
+    if octo_dir_abs not in engine.index:
+        print("\033[92mI got you, 🐙\033[0m")
+        engine.add_folder_to_index(OCTO_DIR)
+        engine.save_index(index_path)
+
     # Check if the index is empty
     if not engine.index:
         print("index is empty, nothing to backup")
         return
 
-    sources = [s for s in engine.index if os.path.exists(s)]
+    if all:
+        sources = [s for s in engine.index if os.path.exists(s)]
+    else:
+        if not paths:
+            paths = ["."]
+        requested_abs = [os.path.abspath(p) for p in paths]
+        sources_set = set()
+        for t in requested_abs:
+            for s in engine.index:
+                if s == t or s.startswith(t + os.sep):
+                    if os.path.exists(s):
+                        sources_set.add(s)
+            if os.path.exists(t):
+                if t in engine.index or any(t.startswith(idx + os.sep) for idx in engine.index):
+                    sources_set.add(t)
+        sources = sorted(list(sources_set))
+
+    if not sources:
+        print("nothing to backup")
+        return
+
     total_files = len(sources)
     logging.info(f"{total_files} items found and ready for backing up")
 

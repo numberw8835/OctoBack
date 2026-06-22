@@ -1,7 +1,7 @@
 import logging
 import os
 
-from modules.constants import DEFAULT_CONFIG
+from modules.constants import DEFAULT_CONFIG, OCTO_DIR
 from modules.engine import Engine
 from modules.ui import draw_progress, human_readable_size
 from modules.util.paths import get_vault_target_path
@@ -52,10 +52,19 @@ def restore_from_backup(path, all_files=False):
             print("no files selected")
             return
 
-        selected_abs = {os.path.abspath(os.path.join(cwd, p)) for p in selected_rel}
-        for vault_file, orig_file in file_list:
-            if orig_file in selected_abs:
-                to_restore.append((vault_file, orig_file))
+        if selected_rel == "__restore_octoback__":
+            abs_target = os.path.abspath(OCTO_DIR)
+            vault_file = get_vault_target_path(abs_target, vault_path)
+            if os.path.exists(vault_file):
+                to_restore.append((vault_file, abs_target))
+            else:
+                print(".octoback backup not found in vault")
+                return
+        else:
+            selected_abs = {os.path.abspath(os.path.join(cwd, p)) for p in selected_rel}
+            for vault_file, orig_file in file_list:
+                if orig_file in selected_abs:
+                    to_restore.append((vault_file, orig_file))
     else:
         # Default to restoring specific path or current directory
         target = path if path else os.getcwd()
