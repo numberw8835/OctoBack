@@ -9,9 +9,11 @@ OctoBack is a lightweight CLI backup manager that separates the **intent** (what
 ## 🚀 Features
 
 - **Decoupled Architecture**: Specify what you want to track separately from when and how you back it up.
-- **Context-Aware Restoration**: Restore folders or files contextually based on your shell's current working directory (`pwd`).
-- **Interactive TUI Restore Mode**: Use keys to visually browse, select, and restore backed-up items inside the current directory.
-- **Path Protection**: Safeguarded against directory traversal attacks (Zip Slip) and shell injection exploits.
+- **Selective & Global Backup**: Run backups for specific paths, files under the current directory, or back up all indexed paths at once.
+- **Context-Aware Restoration**: Restore folders or files contextually based on your shell's current working directory (`pwd`), with safety protections blocking accidental root (`/`) or home directory (`~`) restores.
+- **Interactive TUI Restore Mode**: Visually browse, select, and restore backed-up items inside the current directory, including a direct shortcut to restore the configuration directory `~/.octoback`.
+- **Aesthetic Logic Formatting**: Clean command-line feedback with formal mathematical logic symbols (`⊤`, `⊥`, `∴`, `¬`) and thin-line progress indicators.
+- **Safe Archiving & Extraction**: Compress/expand your vault on demand into a single package (`Vault.tar.gz`) with Zip Slip protection and automatic file cleanups on interrupt or abort.
 - **Easy Installation**: Comes with a quick installation script.
 
 ---
@@ -57,7 +59,7 @@ Rather than transferring files on the fly, you curate an index of important fold
   ```bash
   octoback add folder/
   ```
-  If no directory is specified, it defaults to the current directory (`.`).
+  If no directory is specified, it defaults to the current directory (`.`). Multiple paths can be passed in a single command.
   > [!NOTE]
   > This indexes the folder itself as a single unit. It dynamically tracks and backs up any new files added to the folder in the future. However, in the interactive TUI restore screen, the folder can only be restored as a single unit.
 
@@ -69,24 +71,57 @@ Rather than transferring files on the fly, you curate an index of important fold
   > [!NOTE]
   > This allows you to selectively restore individual files in the TUI restore mode. However, newly created files inside this folder will not be tracked or backed up in the future unless you re-run `octoback add -g`.
 
-  ### 3. The Execution Phase
-  Trigger the backup sync using:
-
+* **Remove from index**:
   ```bash
-  octoback backup
+  octoback remove folder/
+  ```
+  *(Alias: `octoback rm folder/`)*
+
+* **Prune index**:
+  ```bash
+  octoback prune
+  ```
+  Removes non-existent or deleted paths from the index database.
+
+* **List all indexed files**:
+  ```bash
+  octoback list
+  ```
+  Prints the sorted index database (utilizes `bat` for colorized JSON formatting if installed, otherwise defaults to standard output).
+
+### 3. The Execution Phase
+Trigger the backup sync using rsync:
+
+* **Backup specific paths/current directory**:
+  ```bash
+  octoback backup [paths...]
+  ```
+  If no paths are specified, it defaults to the current directory (`.`).
+  > [!NOTE]
+  > The first time you run a backup, OctoBack automatically indexes and tracks your config folder `~/.octoback` so that your settings and indexes are safely backed up too!
+
+* **Backup all indexed files/folders**:
+  ```bash
+  octoback backup --all
   ```
 
-  You can also check if your source files match their backups using hashes:
-
+* **Compress the entire backup vault**:
   ```bash
-  octoback check
+  octoback compress
   ```
+  Compresses your `~/Vault` directory into `~/Vault.tar.gz` and removes the uncompressed directory.
 
-  OctoBack reads `index.json`, mirrors your absolute folder structures inside the vault, compresses them safely into a single package (`block.tar.gz`), and cleans up the uncompressed staging files.
-
+* **Expand the backup vault**:
+  ```bash
+  octoback expand
+  ```
+  Extracts `~/Vault.tar.gz` back into the standard `~/Vault` directory structure and deletes the archive.
 
 ### 4. The Recovery Phase
-Restoring files is fast and can be done selectively:
+Restoring files is fast, safe, and can be done selectively. 
+
+> [!IMPORTANT]
+> **Safety First**: Directly restoring the home directory root (`~`) or system root (`/`) is blocked to protect active configuration files and system locks. Specify subdirectories to restore, or use TUI restore instead.
 
 * **Restore a specific file/folder**:
   ```bash
@@ -99,12 +134,29 @@ Restoring files is fast and can be done selectively:
   ```bash
   octoback restore list
   ```
+  > [!TIP]
+  > **Quick Setup Recovery**: Inside the TUI restore screen, you can press **`o`** to directly restore your configuration directory `~/.octoback`.
 
-* **Full System Restore**:
+* **Full Restore**:
   Restore all indexed folders and files recorded in the database to their original paths:
   ```bash
   octoback restore --all
   ```
+
+---
+
+## 🎨 Minimalist Feedback & Symbols
+
+OctoBack uses a clean, formal mathematical logic style for feedback symbols in console outputs:
+
+| Symbol | Representation | Meaning |
+| :---: | :--- | :--- |
+| `⊤` | **True (Top)** | Operation succeeded successfully |
+| `⊥` | **False (Bottom)** | An error occurred or command failed |
+| `∴` | **Therefore** | General informational message |
+| `¬` | **Negation** | A warning or path not found |
+
+Progress bars are kept clean, thin, and non-intrusive (e.g. `backing up ━━━── 60% | filename.txt`).
 
 ---
 
