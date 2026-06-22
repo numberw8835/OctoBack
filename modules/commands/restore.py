@@ -66,10 +66,13 @@ def restore_from_backup(path, all_files=False):
                 if orig_file in selected_abs:
                     to_restore.append((vault_file, orig_file))
     else:
-        # Default to restoring specific path or current directory
         target = path if path else os.getcwd()
         abs_target = os.path.abspath(target)
-        
+        if abs_target in [os.path.abspath(os.path.expanduser("~")), "/"]:
+            print_error("Restoring the home directory or system root directly is unsafe due to active files.")
+            print_info("Please specify a specific subdirectory to restore, or run: `octoback restore list`")
+            return
+
         # Find all indexed paths that are at or under abs_target
         matching_indexed = []
         for s in engine.index:
