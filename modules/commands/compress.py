@@ -75,10 +75,24 @@ def run_compress():
     vault_path = vault_path.rstrip(os.sep)
     tar_file = vault_path + ".tar.gz"
 
-    if create_tar(vault_path, tar_file):
-        import shutil
-        try:
-            shutil.rmtree(vault_path)
-            print_success(f"Vault compressed and replaced: {tar_file}")
-        except Exception as e:
-            print_error(f"Failed to delete original vault directory: {e}")
+    try:
+        if create_tar(vault_path, tar_file):
+            import shutil
+            try:
+                shutil.rmtree(vault_path)
+                print_success(f"Vault compressed and replaced: {tar_file}")
+            except Exception as e:
+                print_error(f"Failed to delete original vault directory: {e}")
+        else:
+            if os.path.exists(tar_file):
+                try:
+                    os.remove(tar_file)
+                except Exception:
+                    pass
+    except (KeyboardInterrupt, SystemExit):
+        if os.path.exists(tar_file):
+            try:
+                os.remove(tar_file)
+            except Exception:
+                pass
+        raise

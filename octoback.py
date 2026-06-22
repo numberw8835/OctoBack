@@ -204,25 +204,30 @@ def main():
 if __name__ == "__main__":
     import multiprocessing
     multiprocessing.freeze_support()
+
     # Signal interrupt trap handler (Ctrl-C)
     def signal_handler(sig, frame):
-        try:
-            sys.stdout.write("\rExiting... \033[K\n")
-            sys.stdout.flush()
-        except Exception:
-            pass
-        os._exit(130)
+        raise KeyboardInterrupt()
 
     # Attach SIGINT signal listener
     signal.signal(signal.SIGINT, signal_handler)
 
     try:
         main()
+    except (KeyboardInterrupt, SystemExit):
+        try:
+            from modules.ui import print_error
+            print()
+            print_error("Interrupted")
+        except Exception:
+            sys.stdout.write("\n⊥ Interrupted\n")
+        sys.exit(130)
     except EOFError:
         # Handle Ctrl-D (EOF) exit
         try:
-            sys.stdout.write("\rExiting... \033[K\n")
-            sys.stdout.flush()
+            from modules.ui import print_info
+            print()
+            print_info("Exiting...")
         except Exception:
-            pass
-        os._exit(130)
+            sys.stdout.write("\n∴ Exiting...\n")
+        sys.exit(130)

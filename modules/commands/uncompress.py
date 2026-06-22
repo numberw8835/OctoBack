@@ -27,6 +27,8 @@ def run_uncompress():
         print_error(f"Archive file not found: {archive_file}")
         return
 
+    vault_existed_before = os.path.exists(vault_path)
+
     try:
         total_size = 0
         with tarfile.open(archive_file, "r:gz") as tf_check:
@@ -58,5 +60,19 @@ def run_uncompress():
             print_success(f"Vault uncompressed and replaced: {vault_path}")
         except Exception as e:
             print_error(f"Failed to delete original archive file: {e}")
+    except (KeyboardInterrupt, SystemExit):
+        if not vault_existed_before and os.path.exists(vault_path):
+            import shutil
+            try:
+                shutil.rmtree(vault_path)
+            except Exception:
+                pass
+        raise
     except Exception as e:
         print_error(f"Failed to uncompress vault: {e}")
+        if not vault_existed_before and os.path.exists(vault_path):
+            import shutil
+            try:
+                shutil.rmtree(vault_path)
+            except Exception:
+                pass
