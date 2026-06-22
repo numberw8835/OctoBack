@@ -4,10 +4,6 @@ import re
 import subprocess
 import tarfile
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
-
 
 class Controller:
     """
@@ -28,38 +24,6 @@ class Controller:
         except Exception as e:
             logging.error(f"Error scanning directory {directory}: {e}")
         return stuff
-
-    def compare_paths(self, pathA: str, pathB: str) -> tuple[list[str], list[str]]:
-        """
-        Compares two paths by splitting them into individual directory/file components.
-        Returns the remaining non-matching components of each path.
-
-        Returns:
-            A tuple containing two lists:
-                - components of pathA that differ from pathB.
-                - components of pathB that differ from pathA.
-        """
-
-        # Split paths into components based on directory separator
-        split_path_A = pathA.split("/")
-        split_path_B = pathB.split("/")
-
-        logging.info(f"Comparing path A: {pathA} and path B: {pathB}")
-
-        # Find the length of the shorter path to prevent index bounds issues
-        min_len = min(len(split_path_A), len(split_path_B))
-
-        # Compare components index by index up to the length of the shorter path
-        for i in range(min_len):
-            if split_path_A[i] != split_path_B[i]:
-                logging.info(
-                    f"First mismatch at index {i}: Path A component {split_path_A[i]} vs Path B component {split_path_B[i]}"
-                )
-                return (split_path_A[i:], split_path_B[i:])
-
-        # Return any remaining unmatched trailing components for unequal-length paths
-        logging.info("Paths are identical up to the common prefix.")
-        return (split_path_A[min_len:], split_path_B[min_len:])
 
     def copy_to(self, pathA: str, pathB: str, progress_callback=None):
         """

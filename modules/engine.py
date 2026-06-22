@@ -5,10 +5,7 @@ import os
 from modules.util.config import Config
 from modules.util.controller import Controller
 
-# Configure logging format for core system engine operations
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+
 
 
 class Engine:

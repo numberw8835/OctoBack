@@ -10,9 +10,7 @@ from modules.util.paths import get_vault_target_path
 engine = Engine()
 lock_file = None
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+
 
 
 def run_backup():

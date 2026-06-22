@@ -24,7 +24,7 @@ def add_to_index(paths, granular=False):
             engine.update_index(files)
             print(f"added file directly from {path} to the index")
         else:
-            abs_path = os.path.abspath(path)
+            abs_path = os.path.abspath(os.path.expanduser(path))
             if abs_path in engine.index:
                 print(f"{path} is already in the index")
             else:
