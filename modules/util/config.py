@@ -30,7 +30,7 @@ class Config:
                     if key in self.configuration["storage"]:
                         val = self.configuration["storage"][key]
                         if isinstance(val, str):
-                            self.configuration["storage"][key] = os.path.expanduser(val)
+                            self.configuration["storage"][key] = os.path.abspath(os.path.expanduser(val))
 
             logging.info(f"Config loaded from {path} successfully.")
             return True

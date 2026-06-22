@@ -11,8 +11,6 @@ engine = Engine()
 lock_file = None
 
 
-
-
 def run_backup():
     config_path = DEFAULT_CONFIG
 
@@ -85,7 +83,7 @@ def run_backup():
                 nonlocal files_completed
                 # Calculate global percentage: (completed items + progress of current) / total
                 global_progress = (files_completed + percent) / total_files
-                
+
                 if total_bytes == 0:
                     total_bytes = source_size
                     current_bytes = int(source_size * percent)
