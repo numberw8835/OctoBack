@@ -61,4 +61,5 @@ def list_index():
             continue  # try next command in list
 
     else:  # this runs only if the loop completed without `break`
-        print("please install bat or batcat")
+        print("please install bat or batcat for formatted output. Current index:")
+        print(json_content)
