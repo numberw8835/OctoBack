@@ -5,6 +5,7 @@ from tqdm import tqdm
 
 from modules.constants import DEFAULT_CONFIG
 from modules.engine import Engine
+from modules.ui import print_success, print_error
 
 engine = Engine()
 
@@ -46,9 +47,9 @@ def create_tar(vault_path, tar_path):
                                 tar.add(file_path, arcname)
                                 pbar.update(file_size)
                         except Exception as e:
-                            print(f"failed to add file {file_path} to tar")
+                            pass
     except Exception as e:
-        print(f"failed to compress the vault {e}")
+        print_error(f"Failed to compress vault: {e}")
 
 
 def run_compress():
@@ -58,14 +59,14 @@ def run_compress():
     """
     # Load configuration settings
     if not engine.config.load_config(DEFAULT_CONFIG):
-        print("config file not found, please run 'octoback init' first.")
+        print_error("Configuration file not found. Please run 'octoback init' first.")
         return
 
     vault_path = engine.config.configuration["storage"]["vault_path"]
 
     # Verify that the vault directory exists before compressing it
     if not os.path.exists(vault_path):
-        print(f"vault directory not found {vault_path}")
+        print_error(f"Vault directory not found: {vault_path}")
         return
 
     # Setup the names of the compressed folder
@@ -73,5 +74,4 @@ def run_compress():
     tar_file = vault_path + ".tar.gz"
 
     create_tar(vault_path, tar_file)
-
-    print(f"vault has been compressed to {tar_file}")
+    print_success(f"Vault compressed to {tar_file}")

@@ -1,5 +1,6 @@
 from modules.constants import DEFAULT_CONFIG
 from modules.engine import Engine
+from modules.ui import print_success
 
 engine = Engine()
 
@@ -21,4 +22,4 @@ def initialize_environment():
     # Assign and write configuration parameters to ~/.octoback/octo.yaml
     engine.config.set_config(config)
     engine.config.save_config(DEFAULT_CONFIG)
-    print("config file has been established")
+    print_success("Config initialized at ~/.octoback/octo.yaml")

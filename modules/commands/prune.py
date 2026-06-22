@@ -2,20 +2,21 @@ import os
 
 from modules.constants import DEFAULT_CONFIG
 from modules.engine import Engine
+from modules.ui import print_success, print_error, print_info
 
 engine = Engine()
 
 
 def run_prune():
     if not engine.config.load_config(DEFAULT_CONFIG):
-        print("config file not found")
+        print_error("Configuration file not found")
         return
     index_path = engine.config.configuration["storage"]["index_path"]
 
     if os.path.exists(index_path):
         engine.load_index(index_path)
     else:
-        print("index file does not exist")
+        print_error("Index file does not exist")
         return
 
     removed = []
@@ -26,8 +27,8 @@ def run_prune():
 
     if removed:
         engine.save_index(index_path)
-        print("pruned missing paths from index")
+        print_success(f"Pruned {len(removed)} missing paths from index")
         for r in removed:
-            print(f"  {r}")
+            print_info(f"  {r}")
     else:
-        print("nothing to prune")
+        print_info("Nothing to prune")

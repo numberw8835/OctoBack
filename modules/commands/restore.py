@@ -3,7 +3,7 @@ import os
 
 from modules.constants import DEFAULT_CONFIG, OCTO_DIR
 from modules.engine import Engine
-from modules.ui import draw_progress, human_readable_size
+from modules.ui import draw_progress, human_readable_size, print_success, print_error, print_warning, print_info
 from modules.util.paths import get_vault_target_path
 
 engine = Engine()
@@ -11,7 +11,7 @@ engine = Engine()
 
 def restore_from_backup(path, all_files=False):
     if not engine.config.load_config(DEFAULT_CONFIG):
-        print("config not found")
+        print_error("Configuration file not found. Please run 'octoback init' first.")
         return
     config = engine.config.configuration
     vault_path = config["storage"]["vault_path"]
@@ -39,7 +39,7 @@ def restore_from_backup(path, all_files=False):
                 matching_paths.append(indexed_path)
 
         if not matching_paths:
-            print("no indexed files found in current directory")
+            print_warning("No indexed files found in current directory")
             return
 
         matching_paths.sort()
@@ -49,7 +49,7 @@ def restore_from_backup(path, all_files=False):
 
         selected_rel = run_tui(rel_paths)
         if not selected_rel:
-            print("no files selected")
+            print_warning("No files selected")
             return
 
         if selected_rel == "__restore_octoback__":
@@ -58,7 +58,7 @@ def restore_from_backup(path, all_files=False):
             if os.path.exists(vault_file):
                 to_restore.append((vault_file, abs_target))
             else:
-                print(".octoback backup not found in vault")
+                print_error(".octoback backup not found in vault")
                 return
         else:
             selected_abs = {os.path.abspath(os.path.join(cwd, p)) for p in selected_rel}
@@ -74,7 +74,7 @@ def restore_from_backup(path, all_files=False):
             to_restore.append((vault_file, abs_target))
 
     if not to_restore:
-        print(f"nothing to restore")
+        print_warning("Nothing to restore")
         return
 
     # Copy files and draw progress
@@ -135,6 +135,6 @@ def restore_from_backup(path, all_files=False):
     print()
 
     if failed_files:
-        print("failed to restore files")
+        print_error("Failed to restore files:")
         for f in failed_files:
-            print(f"  {f}")
+            print_info(f"  {f}")

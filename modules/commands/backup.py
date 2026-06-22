@@ -4,7 +4,7 @@ import os
 
 from modules.constants import DEFAULT_CONFIG, OCTO_DIR
 from modules.engine import Engine
-from modules.ui import draw_progress, human_readable_size
+from modules.ui import draw_progress, human_readable_size, print_success, print_error, print_warning
 from modules.util.paths import get_vault_target_path
 
 engine = Engine()
@@ -15,7 +15,7 @@ def run_backup(paths=None, all=False):
     config_path = DEFAULT_CONFIG
 
     if not engine.config.load_config(config_path):
-        print("octo.yaml couldn't be found, please run: `octoback init`")
+        print_error("Configuration file not found. Please run 'octoback init' first.")
         return
 
     # Retrieve paths from the configuration
@@ -29,13 +29,13 @@ def run_backup(paths=None, all=False):
     # Check if .octoback is in the index. If not, add it and print the message.
     octo_dir_abs = os.path.abspath(OCTO_DIR)
     if octo_dir_abs not in engine.index:
-        print("\033[92mI got you, 🐙\033[0m")
+        print_success("I got you, 🐙")
         engine.add_folder_to_index(OCTO_DIR)
         engine.save_index(index_path)
 
     # Check if the index is empty
     if not engine.index:
-        print("index is empty, nothing to backup")
+        print_warning("Index is empty, nothing to back up")
         return
 
     if all:
@@ -56,34 +56,31 @@ def run_backup(paths=None, all=False):
         sources = sorted(list(sources_set))
 
     if not sources:
-        print("nothing to backup")
+        print_warning("Nothing to back up")
         return
 
     total_files = len(sources)
     logging.info(f"{total_files} items found and ready for backing up")
 
-    # Aquire a lock to prevent concurrent backups
-
+    # Acquire a lock to prevent concurrent backups
     lock_file_path = os.path.join(OCTO_DIR, "backup.lock")
     try:
         global lock_file
         lock_file = open(lock_file_path, "w")
         fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except BlockingIOError:
-        print("another backup instance is already running")
+        print_error("Another backup instance is already running")
         return
     except Exception as e:
-        print(f"failed to acquire backup lock {e}")
+        print_error(f"Failed to acquire backup lock: {e}")
         return
 
     try:
         # Create the vault
         try:
             os.makedirs(vault_path, exist_ok=True)
-        except FileExistsError:
-            print("vault already exists, skipping creation")
         except Exception as e:
-            print(f"failed to create vault {e}")
+            print_error(f"Failed to create vault: {e}")
             return
 
         # Copy the items to the vault
