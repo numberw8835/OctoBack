@@ -53,7 +53,7 @@ def create_tar(vault_path, tar_path):
 
 def run_compress():
     """
-    Compresses the entire backup vault directory into a single ZIP archive.
+    Compresses the entire backup vault directory into a single tar.gz archive.
     Uses tqdm to show the progress.
     """
     # Load configuration settings

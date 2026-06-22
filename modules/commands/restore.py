@@ -65,7 +65,7 @@ def restore_from_backup(path, all_files=False):
             to_restore.append((vault_file, abs_target))
 
     if not to_restore:
-        print("nothing to restore")
+        print(f"nothing to restore")
         return
 
     # Copy files and draw progress

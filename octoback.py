@@ -61,6 +61,25 @@ def setup_logging(verbose=False):
 def main():
     """
     CLI command dispatcher. Parses input arguments and triggers subcommand handlers.
+    
+    This is the main entry point for the Octo backup manager CLI tool. It supports
+    various commands for managing backups including adding files/directories to 
+    the index, restoring from backup, initializing the environment, running backups,
+    compressing/expanding backup vaults, listing indexed items, and pruning stale paths.
+    
+    Commands:
+      init        Initialize the environment and create configuration file
+      add         Add directory to the index
+      remove/rm   Remove directory or file from the index
+      restore     Restore a specific directory from backup
+      backup      Run the backup process based on the index
+      compress    Compress entire backup vault into tarball
+      expand      Expand tarball into the backup vault
+      list        List all files in the index using TUI
+      prune       Prune non-existent paths from the index
+    
+    Options:
+      -v, --verbose  Enable verbose logging
     """
     parser = argparse.ArgumentParser(
         description=description_message, usage="%(prog)s [command] [options]"

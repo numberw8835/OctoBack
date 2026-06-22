@@ -15,7 +15,8 @@ def run_backup():
     config_path = DEFAULT_CONFIG
 
     if not engine.config.load_config(config_path):
-        print("octo.yaml couldn't be found")
+        print("octo.yaml couldn't be found, please run: `octoback init`")
+        return
 
     # Retrieve paths from the configuration
     vault_path = engine.config.configuration["storage"]["vault_path"]
