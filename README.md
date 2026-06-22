@@ -69,20 +69,30 @@ Rather than transferring files on the fly, you curate an index of important fold
   > [!NOTE]
   > This allows you to selectively restore individual files in the TUI restore mode. However, newly created files inside this folder will not be tracked or backed up in the future unless you re-run `octoback add -g`.
 
-  ### 3. The Execution Phase
-  Trigger the backup sync using:
+### 3. The Execution Phase
+Trigger the backup sync using:
 
-  ```bash
-  octoback backup
-  ```
+```bash
+octoback backup
+```
 
-  You can also check if your source files match their backups using hashes:
+You can also check if your source files match their backups using hashes:
 
-  ```bash
-  octoback check
-  ```
+```bash
+octoback check
+```
 
-  OctoBack reads `index.json`, mirrors your absolute folder structures inside the vault, compresses them safely into a single package (`block.tar.gz`), and cleans up the uncompressed staging files.
+OctoBack reads `index.json`, mirrors your absolute folder structures inside the vault, compresses them safely into a single package (`block.tar.gz`), and cleans up the uncompressed staging files.
+
+The backup command now supports backing up multiple folders at once by specifying paths, as well as the `--all` flag to backup all indexed items:
+
+```bash
+# Backup specific folders
+octoback backup folder1/ folder2/
+
+# Backup all indexed folders
+octoback backup --all
+```
 
 
 ### 4. The Recovery Phase
