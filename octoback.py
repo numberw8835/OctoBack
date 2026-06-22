@@ -13,8 +13,8 @@ from modules.commands import (
     restore_from_backup,
     run_backup,
     run_compress,
-    run_uncompress,
     run_prune,
+    run_uncompress,
 )
 
 description_message = """
@@ -142,7 +142,6 @@ def main():
     # 'prune' command configuration
     subparsers.add_parser("prune", help="Prune non-existent paths from the index.")
 
-
     args = parser.parse_args()
 
     setup_logging(verbose=args.verbose)
@@ -160,7 +159,7 @@ def main():
         run_backup()
     elif args.command == "compress":
         run_compress()
-    elif args.command == "unzip":
+    elif args.command == "expand":
         run_uncompress()
     elif args.command == "list":
         list_index()
