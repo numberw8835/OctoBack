@@ -53,6 +53,10 @@ def run_uncompress():
                     if member.isfile():
                         pbar.update(member.size)
 
-        print_success(f"Vault uncompressed to {vault_path}")
+        try:
+            os.remove(archive_file)
+            print_success(f"Vault uncompressed and replaced: {vault_path}")
+        except Exception as e:
+            print_error(f"Failed to delete original archive file: {e}")
     except Exception as e:
         print_error(f"Failed to uncompress vault: {e}")

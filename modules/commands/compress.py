@@ -48,8 +48,10 @@ def create_tar(vault_path, tar_path):
                                 pbar.update(file_size)
                         except Exception as e:
                             pass
+        return True
     except Exception as e:
         print_error(f"Failed to compress vault: {e}")
+        return False
 
 
 def run_compress():
@@ -73,5 +75,10 @@ def run_compress():
     vault_path = vault_path.rstrip(os.sep)
     tar_file = vault_path + ".tar.gz"
 
-    create_tar(vault_path, tar_file)
-    print_success(f"Vault compressed to {tar_file}")
+    if create_tar(vault_path, tar_file):
+        import shutil
+        try:
+            shutil.rmtree(vault_path)
+            print_success(f"Vault compressed and replaced: {tar_file}")
+        except Exception as e:
+            print_error(f"Failed to delete original vault directory: {e}")
