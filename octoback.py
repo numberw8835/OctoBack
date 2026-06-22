@@ -58,6 +58,25 @@ def setup_logging(verbose=False):
         root_logger.setLevel(logging.CRITICAL + 1)
 
 
+class OctoParser(argparse.ArgumentParser):
+    def error(self, message):
+        import re
+        import sys
+        match = re.search(r"argument command: invalid choice: '([^']+)'", message)
+        if match:
+            message = f"invalid command: '{match.group(1)}'"
+        
+        if message:
+            message = message[0].upper() + message[1:]
+            
+        try:
+            from modules.ui import print_error
+            print_error(message)
+        except Exception:
+            sys.stderr.write(f"⊥ {message}\n")
+        self.exit(2)
+
+
 def main():
     """
     CLI command dispatcher. Parses input arguments and triggers subcommand handlers.
@@ -81,7 +100,7 @@ def main():
     Options:
       -v, --verbose  Enable verbose logging
     """
-    parser = argparse.ArgumentParser(
+    parser = OctoParser(
         description=description_message, usage="%(prog)s [command] [options]"
     )
     parser.add_argument(
