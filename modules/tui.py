@@ -2,7 +2,7 @@ import curses
 
 def run_tui(items, select_mode=True):
     """
-    Simple TUI for selecting items.
+    Dynamic, scrollable TUI for selecting items.
     
     :param items: List of string items (paths) to display
     :param select_mode: True to allow selection; False for view-only
@@ -16,25 +16,43 @@ def run_tui(items, select_mode=True):
         
         selected = [False] * len(items)
         current_idx = 0
+        scroll_offset = 0
         
         while True:
             stdscr.clear()
             max_y, max_x = stdscr.getmaxyx()
             
-            if max_y < 10 or max_x < 30:
+            # Require minimum dimensions
+            if max_y < 8 or max_x < 30:
                 stdscr.addstr(0, 0, "Terminal too small.")
                 stdscr.refresh()
                 stdscr.getch()
                 return None
 
-            # Display items
-            for i, item in enumerate(items):
-                if i == current_idx:
-                    marker = ">" 
+            # Calculate dynamic visible rows (leaving room for top border and bottom instructions)
+            max_rows = max_y - 3
+            if max_rows <= 0:
+                max_rows = 1
+
+            # Adjust scroll_offset to keep current_idx visible on screen
+            if current_idx < scroll_offset:
+                scroll_offset = current_idx
+            elif current_idx >= scroll_offset + max_rows:
+                scroll_offset = current_idx - max_rows + 1
+
+            # Render visible items
+            visible_items = items[scroll_offset : scroll_offset + max_rows]
+            for idx, item in enumerate(visible_items):
+                actual_idx = scroll_offset + idx
+                
+                if actual_idx == current_idx:
+                    marker = ">"
+                    attr = curses.A_REVERSE
                 else:
                     marker = " "
+                    attr = curses.A_NORMAL
                 
-                if select_mode and selected[i]:
+                if select_mode and selected[actual_idx]:
                     check = "[x]"
                 elif select_mode:
                     check = "[ ]"
@@ -42,14 +60,28 @@ def run_tui(items, select_mode=True):
                     check = ""
                     
                 display_text = f"{marker} {check} {item}"
-                if i < max_y - 3:  # Leave room for instructions
-                    stdscr.addstr(i + 1, 2, display_text[:max_x-4])
+                # Truncate and pad to create a uniform selection bar
+                display_text = display_text[:max_x - 4].ljust(max_x - 4)
+                
+                try:
+                    stdscr.addstr(idx + 1, 2, display_text, attr)
+                except curses.error:
+                    pass
 
-            # Show instructions
-            if select_mode:
-                stdscr.addstr(max_y - 2, 2, "j/k: move • space: select • enter: confirm • o: restore .octoback • q: quit")
+            # Display instructions/status bar at the bottom
+            instructions = "j/k: move • space: select • enter: confirm • o: restore .octoback • q: quit" if select_mode else "j/k: move • enter/q: quit"
+            
+            # Show counter if there are hidden items
+            if len(items) > max_rows:
+                indicator = f" ({current_idx + 1}/{len(items)})"
+                status_text = instructions[:max_x - len(indicator) - 4] + indicator
             else:
-                stdscr.addstr(max_y - 2, 2, "j/k: move • enter/q: quit")
+                status_text = instructions[:max_x - 4]
+                
+            try:
+                stdscr.addstr(max_y - 2, 2, status_text)
+            except curses.error:
+                pass
 
             stdscr.refresh()
             
