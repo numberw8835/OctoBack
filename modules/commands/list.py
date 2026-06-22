@@ -32,31 +32,33 @@ def list_index():
 
     # Display as JSON using bat or fallback to simple printing
     json_content = json.dumps(items, indent=2)
-
-    try:
-        # Try to use bat for display with enhanced styling
-        result = subprocess.run(
-            [
-                "bat",
-                "--style=numbers,header",
-                "--paging=never",
-                "--language=json",
-                "--theme=OneHalfDark",
-            ],
-            input=json_content,
-            text=True,
-            capture_output=True,
-            check=True,
-        )
-
-        # Apply purple coloring to bat output if colorama is available
+    command_name = ["bat", "batcat"]
+    for name in command_name:
         try:
-            from colorama import Fore, Style, init
+            result = subprocess.run(
+                [
+                    name,
+                    "--style=numbers,header",
+                    "--paging=never",
+                    "--language=json",
+                    "--theme=OneHalfDark",
+                ],
+                input=json_content,
+                text=True,
+                capture_output=True,
+                check=True,
+            )
 
-            init(autoreset=True)
-            print(Fore.MAGENTA + result.stdout)
-        except ImportError:
-            print(result.stdout)
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        # Fallback to regular printing with purple coloring
-        print("please install, bat or batcat")
+            try:
+                from colorama import Fore, Style, init
+
+                init(autoreset=True)
+                print(Fore.MAGENTA + result.stdout)
+            except ImportError:
+                pass  # no colorama, just print raw
+            break  # success — stop the loop
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            continue  # try next command in list
+
+    else:  # this runs only if the loop completed without `break`
+        print("please install bat or batcat")
