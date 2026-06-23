@@ -9,6 +9,7 @@ from modules.commands import (
     add_to_index,
     initialize_environment,
     list_index,
+    run_check,
     remove_from_index,
     restore_from_backup,
     run_backup,
@@ -189,6 +190,18 @@ def main():
     # 'list' command configuration
     subparsers.add_parser("list", help="List all files in the index using the TUI.")
 
+    # 'check' command configuration
+    check_parser = subparsers.add_parser(
+        "check", help="Check a file or folder by comparing SHA1 hashes with vault backup."
+    )
+    check_parser.add_argument(
+        "check",
+        type=str,
+        nargs="*",
+        default=["."],
+        help="File or directory paths to check (defaults to current directory if not specified)",
+    )
+
     # 'prune' command configuration
     subparsers.add_parser("prune", help="Prune non-existent paths from the index.")
 
@@ -213,6 +226,8 @@ def main():
         run_uncompress()
     elif args.command == "list":
         list_index()
+    elif args.command == "check":
+        run_check(args.check)
     elif args.command == "prune":
         run_prune()
     else:

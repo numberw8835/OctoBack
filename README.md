@@ -61,7 +61,7 @@ Rather than transferring files on the fly, you curate an index of important fold
   ```
   If no directory is specified, it defaults to the current directory (`.`). Multiple paths can be passed in a single command.
   > [!NOTE]
-  > This indexes the folder itself as a single unit. It dynamically tracks and backs up any new files added to the folder in the future. However, in the interactive TUI restore screen, the folder can only be restored as a single unit.
+  > This indexes the folder itself as a single unit. It dynamically tracks and backs up any new files added to the folder in the future. However, in the interactive TUI restore mode, the folder can only be restored as a single unit.
 
 * **Granular Indexing**:
   ```bash
@@ -88,6 +88,12 @@ Rather than transferring files on the fly, you curate an index of important fold
   octoback list
   ```
   Prints the sorted index database (utilizes `bat` for colorized JSON formatting if installed, otherwise defaults to standard output).
+
+* **Check file/folder integrity**:
+  ```bash
+  octoback check path/to/file_or_folder
+  ```
+  Compares SHA1 hashes between vault backup and local file. Outputs: `[Vault SHA1] : [Local SHA1] ⊤` (green if match) or `⊥` (red if different).
 
 ### 3. The Execution Phase
 Trigger the backup sync using rsync:
@@ -155,6 +161,8 @@ OctoBack uses a clean, formal mathematical logic style for feedback symbols in c
 | `⊥` | **False (Bottom)** | An error occurred or command failed |
 | `∴` | **Therefore** | General informational message |
 | `¬` | **Negation** | A warning or path not found |
+| `⊤` | **True (Top)** | SHA1 hashes match (green) |
+| `⊥` | **False (Bottom)** | SHA1 hashes differ (red) |
 
 Progress bars are kept clean, thin, and non-intrusive (e.g. `backing up ━━━── 60% | filename.txt`).
 
