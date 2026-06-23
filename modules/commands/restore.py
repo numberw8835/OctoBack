@@ -124,10 +124,13 @@ def restore_from_backup(path, all_files=False):
 
             if total_bytes == 0:
                 total_bytes = source_size
-                current_bytes = int(source_size * percent)
+                if current_bytes == 0:
+                    current_bytes = int(source_size * percent)
 
             extra_info = ""
-            if total_bytes > 0:
+            if current_bytes == 0 and percent == 0.0:
+                extra_info = "(checking...)"
+            elif total_bytes > 0:
                 curr_str = human_readable_size(current_bytes)
                 tot_str = human_readable_size(total_bytes)
                 extra_info = f"({curr_str} / {tot_str} | {int(percent * 100)}%)"
@@ -139,6 +142,9 @@ def restore_from_backup(path, all_files=False):
                 action="restoring ",
                 extra_info=extra_info,
             )
+
+        # Draw initial progress state showing "checking..." immediately
+        update_progress_callback(0.0, 0, 0)
 
         # Make sure destination directories exist
         os.makedirs(os.path.dirname(orig_file), exist_ok=True)

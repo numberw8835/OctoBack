@@ -111,10 +111,13 @@ def run_backup(paths=None, all=False):
 
                 if total_bytes == 0:
                     total_bytes = source_size
-                    current_bytes = int(source_size * percent)
+                    if current_bytes == 0:
+                        current_bytes = int(source_size * percent)
 
                 extra_info = ""
-                if total_bytes > 0:
+                if current_bytes == 0 and percent == 0.0:
+                    extra_info = "(checking...)"
+                elif total_bytes > 0:
                     curr_str = human_readable_size(current_bytes)
                     tot_str = human_readable_size(total_bytes)
                     extra_info = f"({curr_str} / {tot_str} | {int(percent * 100)}%)"
@@ -126,6 +129,9 @@ def run_backup(paths=None, all=False):
                     action="backing up ",
                     extra_info=extra_info,
                 )
+
+            # Draw initial progress state showing "checking..." immediately
+            update_progress_callback(0.0, 0, 0)
 
             logging.info(f"backing up {source} to {dest}")
             # Perform the copy with the callback
